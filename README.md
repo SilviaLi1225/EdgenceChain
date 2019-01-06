@@ -1,10 +1,15 @@
-#说明
+#  说明：
 
 5个class，1把锁chain_lock，然后定义了一组函数。
 
 这一组函数粗略地划分了若干个模块，# chain，# Chain Persistance，# UTXO set， # Proof of work， # Validation，# mempool， # Merkle trees， # Peer-to-peer，# Wallet， # Misc. utilities。
 
-目的： 重新划分松耦合的几个模块，并且每个模块的功能尽可能简单，每个模块写在一个单独的Python文件里。以后对某个功能进行开发扩展时，只要考虑对应的模块，而不用考虑其它代码。
+### 目的： 
+重新划分松耦合的几个模块，并且每个模块的功能尽可能简单，每个模块写在一个单独的Python文件里。以后对某个功能进行开发扩展时，只要考虑对应的模块，而不用考虑其它代码。
+
+### 另外：
+  +  该Python代码的中文注释： https://github.com/EdgeIntelligenceChain/EdgenceChain/blob/comments_by_jinliang/edgencechain.py
+  +  区块链和比特币的基础知识： https://github.com/EdgeIntelligenceChain/Materials2Study
 
 
 # Edgencechain
