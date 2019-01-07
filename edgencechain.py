@@ -179,6 +179,9 @@ class Transaction(NamedTuple):
     txins: Iterable[TxIn]
     txouts: Iterable[TxOut]
 
+    tmp_1 : int
+    tmp_2 : int = 0
+    tmp_3 : str = ''
     # The block number or timestamp at which this transaction is unlocked.
     # < 500000000: Block number at which this transaction is unlocked.
     # >= 500000000: UNIX timestamp at which this transaction is unlocked.
@@ -201,6 +204,7 @@ class Transaction(NamedTuple):
             txouts=[TxOut(
                 value=value,
                 to_address=pay_to_addr)],
+            tmp1 = 1
         )
 
     @property
@@ -267,7 +271,8 @@ genesis_block = Block(
             to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
         txouts=[TxOut(
             value=5000000000,
-            to_address='143UVyz7ooiAv1pMqbwPPpnH4BV9ifJGFF')], locktime=None)])
+            to_address='143UVyz7ooiAv1pMqbwPPpnH4BV9ifJGFF')], locktime=None,
+        tmp_1 = 1)])
 
 # The highest proof-of-work, valid blockchain.
 #

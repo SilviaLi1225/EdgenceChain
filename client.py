@@ -98,7 +98,8 @@ def send_value(args: dict):
 
     txn = t.Transaction(
         txins=[make_txin(sk, coin.outpoint, txout) for coin in selected],
-        txouts=[txout])
+        txouts=[txout],
+        tmp_1=1)
 
     logger.info(f'built txn {txn}')
     logger.info(f'broadcasting txn {txn.id}')
