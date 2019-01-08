@@ -8,8 +8,9 @@ from functools import lru_cache
 from typing import (Callable, Dict, Iterable, Mapping, NamedTuple, Tuple, List,
                     Union, get_type_hints)
 
-import edgencechain.definitions as defs
-import edgencechain.chain as chain
+import edgencechain.chain
+import edgencechain.definitions
+
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -43,10 +44,10 @@ def deserialize(serialized: str) -> object:
     """NamedTuple-flavored serialization from JSON."""
     # gs = globals()
     # 原本是使用全局定义的继承NamedTuple的类型，现在需要从其他模块引入，这样是为了避免循环引用
-    types = {attr: getattr(defs, attr) for attr in dir(defs)}
+    types = {attr: getattr(edgencechain.definitions, attr) for attr in dir(edgencechain.definitions)}
     regex = re.compile(r'\w+Msg$')
-    msg_types =  list(filter(regex.match, dir(chain)))
-    types.update({attr: getattr(chain, attr) for attr in msg_types})
+    msg_types =  list(filter(regex.match, dir(edgencechain.chain)))
+    types.update({attr: getattr(edgencechain.chain, attr) for attr in msg_types})
 
     def contents_to_objs(o):
         if isinstance(o, list):
