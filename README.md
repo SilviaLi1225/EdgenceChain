@@ -13,7 +13,13 @@ expense of advanced functionality, speed, and any real usefulness.
 
   | 文件名 | 内容 | 
   | :------| :------ |
-  | edgencechain.py | 区块链核心 | 
+  | edgencechain | 区块链核心 | 
+  | ├ chain.py | 区块链核心 |
+  | ├ definitions.py | 数据结构定义 |
+  | ├ helpers.py | 工具函数 |
+  | ├ params.py | 参数 |
+  | ├ wallet.py | 钱包相关 |
+  | ├ mempool.py | |
   | client.py | 客户端 |
  
 - Docker配置文件
