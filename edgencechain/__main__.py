@@ -1,6 +1,9 @@
 import logging
 import os
+import sys
 import threading
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from edgencechain.chain import (GetBlocksMsg, TCPHandler, ThreadedTCPServer,
                                 active_chain, ibd_done, init_wallet,
@@ -13,6 +16,7 @@ logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
     format='[%(asctime)s][%(module)s:%(lineno)d] %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
+
 
 def main():
     load_from_disk()

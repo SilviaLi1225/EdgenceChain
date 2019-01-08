@@ -1,13 +1,15 @@
 import binascii
 import hashlib
+import re
 import json
 import logging
 import os
 from functools import lru_cache
-from typing import (Callable, Dict, Iterable, Mapping, NamedTuple, Tuple,
+from typing import (Callable, Dict, Iterable, Mapping, NamedTuple, Tuple, List,
                     Union, get_type_hints)
 
 import edgencechain.definitions as defs
+import edgencechain.chain as chain
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -42,6 +44,9 @@ def deserialize(serialized: str) -> object:
     # gs = globals()
     # 原本是使用全局定义的继承NamedTuple的类型，现在需要从其他模块引入，这样是为了避免循环引用
     types = {attr: getattr(defs, attr) for attr in dir(defs)}
+    regex = re.compile(r'\w+Msg$')
+    msg_types =  list(filter(regex.match, dir(chain)))
+    types.update({attr: getattr(chain, attr) for attr in msg_types})
 
     def contents_to_objs(o):
         if isinstance(o, list):
