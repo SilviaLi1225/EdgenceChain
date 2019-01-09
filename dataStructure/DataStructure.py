@@ -250,11 +250,11 @@ class MemPool(object):
 	        *txout, txid=txid, is_coinbase=False, height=-1, txout_idx=idx)
 
 
-	def select_from_mempool(self,block: Block) -> Block:
+	def select_from_mempool(self, block: Block) -> Block:
 	    """Fill a Block with transactions from the mempool."""
 	    added_to_block = set()
 
-	    def check_block_size(b) -> bool:
+	    def check_block_size(block) -> bool:
 	        return len(serialize(block)) < Params.MAX_BLOCK_SERIALIZED_SIZE
 
 		def try_add_to_block(block, txid) -> Block:
@@ -301,7 +301,7 @@ class MemPool(object):
 	    return block
 
 
-	def add_txn_to_mempool(self.txn: Transaction):
+	def add_txn_to_mempool(self, txn: Transaction):
 	    if txn.id in mempool:
 	        logger.info(f'txn {txn.id} already seen')
 	        return
