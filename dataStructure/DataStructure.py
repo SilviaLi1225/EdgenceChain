@@ -240,6 +240,43 @@ class Block(NamedTuple):
 
 
 
+    def calculate_fees(self) -> int:
+	"""
+	Given the txns in a Block, subtract the amount of coin output from the
+	inputs. This is kept as a reward by the miner.
+	"""
+	fee = 0
+
+	def utxo_from_block(txin):
+	    tx = [t.txouts for t in self.txns if t.id == txin.to_spend.txid]
+	    return tx[0][txin.to_spend.txout_idx] if tx else None
+
+	def find_utxo(txin):
+	    return utxo_set.get(txin.to_spend) or utxo_from_block(txin)
+
+	for txn in block.txns:
+	    spent = sum(find_utxo(i).value for i in txn.txins)
+	    sent = sum(o.value for o in txn.txouts)
+	    fee += (spent - sent)
+
+	return fee
+
+    @classmethod
+    def get_block_subsidy(active_chain) -> int:
+	halvings = len(active_chain) // Params.HALVE_SUBSIDY_AFTER_BLOCKS_NUM
+
+	if halvings >= 64:
+	    return 0
+
+	return 50 * Params.LET_PER_COIN // (2 ** halvings)
+
+
+
+
+
+
+
+
 
 
 # Merkle trees
