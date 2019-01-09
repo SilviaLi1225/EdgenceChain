@@ -49,50 +49,6 @@ class InvMsg(NamedTuple):  # Convey blocks to a peer who is doing initial sync
 
 
 
-def read_all_from_socket(req) -> object:
-    data = b''
-    # Our protocol is: first 4 bytes signify msg length.
-    msg_len = int(binascii.hexlify(req.recv(4) or b'\x00'), 16)
-
-    while msg_len > 0:
-        tdat = req.recv(1024)
-        data += tdat
-        msg_len -= len(tdat)
-
-    return deserialize(data.decode()) if data else None
-
-
-def send_to_peer(data, peer=None):
-    """Send a message to a (by default) random peer."""
-    global peer_hostnames
-
-    peer = peer or random.choice(list(peer_hostnames))
-    tries_left = 3
-
-    while tries_left > 0:
-        try:
-            with socket.create_connection((peer, PORT), timeout=1) as s:
-                s.sendall(encode_socket_data(data))
-        except Exception:
-            logger.exception(f'failed to send to peer {peer}')
-            tries_left -= 1
-            time.sleep(2)
-        else:
-            return
-
-    logger.info(f"[p2p] removing dead peer {peer}")
-    peer_hostnames = {x for x in peer_hostnames if x != peer}
-
-
-def int_to_8bytes(a: int) -> bytes: return binascii.unhexlify(f"{a:0{8}x}")
-
-
-def encode_socket_data(data: object) -> bytes:
-    """Our protocol is: first 4 bytes signify msg length."""
-    to_send = serialize(data).encode()
-    return int_to_8bytes(len(to_send)) + to_send
-
-
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass
 

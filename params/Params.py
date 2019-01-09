@@ -47,3 +47,18 @@ class Params:
     #
     # #realname SubsidyHalvingInterval
     HALVE_SUBSIDY_AFTER_BLOCKS_NUM = 210_000
+
+
+    genesis_block = Block(
+	version=0, prev_block_hash=None,
+	merkle_hash=(
+	    '7118894203235a955a908c0abfc6d8fe6edec47b0a04ce1bf7263da3b4366d22'),
+	timestamp=1501821412, bits=24, nonce=10126761,
+	txns=[Transaction(
+	    txins=[TxIn(
+		to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
+	    txouts=[TxOut(
+		value=5000000000,
+		to_address='143UVyz7ooiAv1pMqbwPPpnH4BV9ifJGFF')], locktime=None)])
+
+

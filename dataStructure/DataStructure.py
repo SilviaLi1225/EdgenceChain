@@ -260,6 +260,9 @@ class MerkleNode(NamedTuple):
 	    if len(leaves) % 2 == 1:
 	        leaves = leaves + (leaves[-1],)
 
+	    def _chunks(l, n) -> Iterable[Iterable]:
+		return (l[i:i + n] for i in range(0, len(l), n))
+
 	    def find_root(nodes):
 	        newlevel = [
 	            cls(sha256d(i1.val + i2.val), children=[i1, i2])
