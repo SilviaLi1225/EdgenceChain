@@ -5,53 +5,6 @@
   putting the rough in "rough consensus"
 
 
-Some terminology:
-
-- Chain: an ordered list of Blocks, each of which refers to the last and
-      cryptographically preserves a history of Transactions.
-
-- Transaction (or tx or txn): a list of inputs (i.e. past outputs being spent)
-    and outputs which declare value assigned to the hash of a public key.
-
-- PoW (proof of work): the solution to a puzzle which allows the acceptance
-    of an additional Block onto the chain.
-
-- Reorg: chain reorganization. When a side branch overtakes the main chain.
-
-
-An incomplete list of unrealistic simplifications:
-
-- Byte encoding and endianness are very important when serializing a
-  data structure to be hashed in Bitcoin and are not reproduced
-  faithfully here. In fact, serialization of any kind here is slipshod and
-  in many cases relies on implicit expectations about Python JSON
-  serialization.
-
-- Transaction types are limited to P2PKH.
-
-- Initial Block Download eschews `getdata` and instead returns block payloads
-  directly in `inv`.
-
-- Peer "discovery" is done through environment variable hardcoding. In
-  bitcoin core, this is done with DNS seeds.
-  See https://bitcoin.stackexchange.com/a/3537/56368
-
-
-Resources:
-
-- https://en.bitcoin.it/wiki/Protocol_rules
-- https://en.bitcoin.it/wiki/Protocol_documentation
-- https://bitcoin.org/en/developer-guide
-- https://github.com/bitcoinbook/bitcoinbook/blob/second_edition/ch06.asciidoc
-
-
-TODO:
-
-- deal with orphan blocks
-- keep the mempool heap sorted by fee
-- make use of Transaction.locktime
-? make use of TxIn.sequence; i.e. replace-by-fee
-
 """
 import binascii
 import time
@@ -464,77 +417,6 @@ def mine_forever():
 
 # Validation
 # ----------------------------------------------------------------------------
-
-
-def validate_txn(txn: Transaction,
-                 as_coinbase: bool = False,
-                 siblings_in_block: Iterable[Transaction] = None,
-                 allow_utxo_from_mempool: bool = True,
-                 ) -> Transaction:
-    """
-    Validate a single transaction. Used in various contexts, so the
-    parameters facilitate different uses.
-    """
-    txn.validate_basics(as_coinbase=as_coinbase)
-
-    available_to_spend = 0
-
-    for i, txin in enumerate(txn.txins):
-        utxo = utxo_set.get(txin.to_spend)
-
-        if siblings_in_block:
-            utxo = utxo or find_utxo_in_list(txin, siblings_in_block)
-
-        if allow_utxo_from_mempool:
-            utxo = utxo or find_utxo_in_mempool(txin)
-
-        if not utxo:
-            raise TxnValidationError(
-                f'Could find no UTXO for TxIn[{i}] -- orphaning txn',
-                to_orphan=txn)
-
-        if utxo.is_coinbase and \
-                (get_current_height() - utxo.height) < \
-                Params.COINBASE_MATURITY:
-            raise TxnValidationError(f'Coinbase UTXO not ready for spend')
-
-        try:
-            validate_signature_for_spend(txin, utxo, txn)
-        except TxUnlockError:
-            raise TxnValidationError(f'{txin} is not a valid spend of {utxo}')
-
-        available_to_spend += utxo.value
-
-    if available_to_spend < sum(o.value for o in txn.txouts):
-        raise TxnValidationError('Spend value is more than available')
-
-    return txn
-
-
-def validate_signature_for_spend(txin, utxo: UnspentTxOut, txn):
-    pubkey_as_addr = pubkey_to_address(txin.unlock_pk)
-    verifying_key = ecdsa.VerifyingKey.from_string(
-        txin.unlock_pk, curve=ecdsa.SECP256k1)
-
-    if pubkey_as_addr != utxo.to_address:
-        raise TxUnlockError("Pubkey doesn't match")
-
-    try:
-        spend_msg = build_spend_message(
-            txin.to_spend, txin.unlock_pk, txin.sequence, txn.txouts)
-        verifying_key.verify(txin.unlock_sig, spend_msg)
-    except Exception:
-        logger.exception('Key verification failed')
-        raise TxUnlockError("Signature doesn't match")
-
-    return True
-
-
-def build_spend_message(to_spend, pk, sequence, txouts) -> bytes:
-    """This should be ~roughly~ equivalent to SIGHASH_ALL."""
-    return sha256d(
-        serialize(to_spend) + str(sequence) +
-        binascii.hexlify(pk).decode() + serialize(txouts)).encode()
 
 
 @with_lock(chain_lock)

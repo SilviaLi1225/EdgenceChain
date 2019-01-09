@@ -1,11 +1,64 @@
 # Edgencechain
 
+## Readme
 
 
 Edgencechain is a pocket-sized implementation of Bitcoin. Its goal is to
 be a compact, understandable, working incarnation of 
 [the Nakamoto consensus algorithm](https://github.com/EdgeIntelligenceChain/Materials2Study/blob/master/%E6%AF%94%E7%89%B9%E5%B8%81%E7%99%BD%E7%9A%AE%E4%B9%A6.pdf) at the
 expense of advanced functionality, speed, and any real usefulness.
+
+
+
+Some terminology:
+
+- Chain: an ordered list of Blocks, each of which refers to the last and
+      cryptographically preserves a history of Transactions.
+
+- Transaction (or tx or txn): a list of inputs (i.e. past outputs being spent)
+    and outputs which declare value assigned to the hash of a public key.
+
+- PoW (proof of work): the solution to a puzzle which allows the acceptance
+    of an additional Block onto the chain.
+
+- Reorg: chain reorganization. When a side branch overtakes the main chain.
+
+
+An incomplete list of unrealistic simplifications:
+
+- Byte encoding and endianness are very important when serializing a
+  data structure to be hashed in Bitcoin and are not reproduced
+  faithfully here. In fact, serialization of any kind here is slipshod and
+  in many cases relies on implicit expectations about Python JSON
+  serialization.
+
+- Transaction types are limited to P2PKH.
+
+- Initial Block Download eschews `getdata` and instead returns block payloads
+  directly in `inv`.
+
+- Peer "discovery" is done through environment variable hardcoding. In
+  bitcoin core, this is done with DNS seeds.
+  See https://bitcoin.stackexchange.com/a/3537/56368
+
+
+Resources:
+
+- https://en.bitcoin.it/wiki/Protocol_rules
+- https://en.bitcoin.it/wiki/Protocol_documentation
+- https://bitcoin.org/en/developer-guide
+- https://github.com/bitcoinbook/bitcoinbook/blob/second_edition/ch06.asciidoc
+
+
+TODO:
+
+- deal with orphan blocks
+- keep the mempool heap sorted by fee
+- make use of Transaction.locktime
+? make use of TxIn.sequence; i.e. replace-by-fee
+
+
+
 
 ## 代码文件
 

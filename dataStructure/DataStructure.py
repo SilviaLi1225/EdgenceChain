@@ -121,6 +121,85 @@ class Transaction(NamedTuple):
         if sum(t.value for t in self.txouts) > Params.MAX_MONEY:
             raise TxnValidationError('Spend value too high')
 
+    @classmethod 
+    def validate_txn(txn: cls,
+		     as_coinbase: bool = False,
+		     siblings_in_block: Iterable[cls] = None,
+		     allow_utxo_from_mempool: bool = True,
+		     ) -> cls:
+	"""
+	Validate a single transaction. Used in various contexts, so the
+	parameters facilitate different uses.
+	"""
+	txn.validate_basics(as_coinbase=as_coinbase)
+
+	available_to_spend = 0
+
+	for i, txin in enumerate(txn.txins):
+	    utxo = utxo_set.get(txin.to_spend)
+
+	    if siblings_in_block:
+		utxo = utxo or find_utxo_in_list(txin, siblings_in_block)
+
+	    if allow_utxo_from_mempool:
+		utxo = utxo or find_utxo_in_mempool(txin)
+
+	    if not utxo:
+		raise TxnValidationError(
+		    f'Could find no UTXO for TxIn[{i}] -- orphaning txn',
+		    to_orphan=txn)
+
+	    if utxo.is_coinbase and \
+		    (get_current_height() - utxo.height) < \
+		    Params.COINBASE_MATURITY:
+		raise TxnValidationError(f'Coinbase UTXO not ready for spend')
+
+	    try:
+		validate_signature_for_spend(txin, utxo, txn)
+	    except TxUnlockError:
+		raise TxnValidationError(f'{txin} is not a valid spend of {utxo}')
+
+	    available_to_spend += utxo.value
+
+	if available_to_spend < sum(o.value for o in txn.txouts):
+	    raise TxnValidationError('Spend value is more than available')
+
+	return txn
+
+
+	def validate_signature_for_spend(txin, utxo: UnspentTxOut, txn):
+	    pubkey_as_addr = pubkey_to_address(txin.unlock_pk)
+	    verifying_key = ecdsa.VerifyingKey.from_string(
+		txin.unlock_pk, curve=ecdsa.SECP256k1)
+
+	    if pubkey_as_addr != utxo.to_address:
+		raise TxUnlockError("Pubkey doesn't match")
+
+	    try:
+		spend_msg = build_spend_message(
+		    txin.to_spend, txin.unlock_pk, txin.sequence, txn.txouts)
+		verifying_key.verify(txin.unlock_sig, spend_msg)
+	    except Exception:
+		logger.exception('Key verification failed')
+		raise TxUnlockError("Signature doesn't match")
+
+	    return True
+
+
+	def build_spend_message(to_spend, pk, sequence, txouts) -> bytes:
+	    """This should be ~roughly~ equivalent to SIGHASH_ALL."""
+	    return sha256d(
+		serialize(to_spend) + str(sequence) +
+		binascii.hexlify(pk).decode() + serialize(txouts)).encode()
+
+
+
+
+
+
+
+
+
 
 class Block(NamedTuple):
     # A version integer.
