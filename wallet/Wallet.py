@@ -1,7 +1,7 @@
 class Wallet(object):
 
     @classmethod
-    def pubkey_to_address(pubkey: bytes) -> str:
+    def pubkey_to_address(cls, pubkey: bytes) -> str:
 	if 'ripemd160' not in hashlib.algorithms_available:
 	    raise RuntimeError('missing ripemd160 hash algorithm')
 
@@ -11,8 +11,7 @@ class Wallet(object):
 
     @classmethod
     @lru_cache()
-    def init_wallet(path=None):
-	path = path or WALLET_PATH
+    def init_wallet(cls, path=None):
 
 	if os.path.exists(path):
 	    with open(path, 'rb') as f:
