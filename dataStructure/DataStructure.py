@@ -282,24 +282,24 @@ class MerkleNode(NamedTuple):
 	    return cls.get_merkle_root(*[t.id for t in txns])
 
     @classmethod
-	@lru_cache(maxsize=1024)
-	def get_merkle_root(cls, *leaves: Tuple[str]) -> cls:
-	    """Builds a Merkle tree and returns the root given some leaf values."""
-	    if len(leaves) % 2 == 1:
-	        leaves = leaves + (leaves[-1],)
+    @lru_cache(maxsize=1024)
+    def get_merkle_root(cls, *leaves: Tuple[str]) -> cls:
+	"""Builds a Merkle tree and returns the root given some leaf values."""
+	if len(leaves) % 2 == 1:
+	    leaves = leaves + (leaves[-1],)
 
-	    def _chunks(l, n) -> Iterable[Iterable]:
-		return (l[i:i + n] for i in range(0, len(l), n))
+	def _chunks(l, n) -> Iterable[Iterable]:
+	    return (l[i:i + n] for i in range(0, len(l), n))
 
-	    def find_root(nodes):
-	        newlevel = [
-	            cls(sha256d(i1.val + i2.val), children=[i1, i2])
-	            for [i1, i2] in _chunks(nodes, 2)
-	        ]
+	def find_root(nodes):
+	    newlevel = [
+		cls(sha256d(i1.val + i2.val), children=[i1, i2])
+		for [i1, i2] in _chunks(nodes, 2)
+	    ]
 
-	        return find_root(newlevel) if len(newlevel) > 1 else newlevel[0]
+	    return find_root(newlevel) if len(newlevel) > 1 else newlevel[0]
 
-	    return find_root([cls(sha256d(l)) for l in leaves])
+	return find_root([cls(sha256d(l)) for l in leaves])
 
 
 
@@ -326,15 +326,15 @@ class UTXO_Set(object):
 	    del self.utxoSet[OutPoint(txid, txout_idx)]
 
     @classmethod  
-	def find_utxo_in_list(cls, txin, txns) -> UnspentTxOut:
-	    txid, txout_idx = txin.to_spend
-	    try:
-	        txout = [t for t in txns if t.id == txid][0].txouts[txout_idx]
-	    except Exception:
-	        return None
+    def find_utxo_in_list(cls, txin, txns) -> UnspentTxOut:
+	txid, txout_idx = txin.to_spend
+	try:
+	    txout = [t for t in txns if t.id == txid][0].txouts[txout_idx]
+	except Exception:
+	    return None
 
-	    return UnspentTxOut(
-	        *txout, txid=txid, is_coinbase=False, height=-1, txout_idx=txout_idx)
+	return UnspentTxOut(
+	    *txout, txid=txid, is_coinbase=False, height=-1, txout_idx=txout_idx)
 
 # mempool  Set of yet-unmined transactions.
 
@@ -367,7 +367,7 @@ class MemPool(object):
 	    def check_block_size(block) -> bool:
 	        return len(serialize(block)) < Params.MAX_BLOCK_SERIALIZED_SIZE
 
-		def try_add_to_block(block, txid) -> Block:
+	    def try_add_to_block(block, txid) -> Block:
 	        if txid in added_to_block:
 	            return block
 
