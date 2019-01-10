@@ -31,6 +31,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def with_lock(lock):
+    def dec(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with lock:
+                return func(*args, **kwargs)
+        return wrapper
+    return dec
+
 
 
 
