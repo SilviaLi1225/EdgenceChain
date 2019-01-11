@@ -13,6 +13,12 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
+from dataStructure.DataStructure  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+                                          Block)
+from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
+from utils import Utils
+from params.Params import Params
+
 import ecdsa
 from base58 import b58encode_check
 
@@ -112,51 +118,50 @@ class Transaction(NamedTuple):
         if sum(t.value for t in self.txouts) > Params.MAX_MONEY:
             raise TxnValidationError('Spend value too high')
 
-    @classmethod 
-    def validate_txn(txn: cls,
-		     as_coinbase: bool = False,
-		     siblings_in_block: Iterable[cls] = None,
-		     allow_utxo_from_mempool: bool = True,
-		     ) -> cls:
-	"""
-	Validate a single transaction. Used in various contexts, so the
-	parameters facilitate different uses.
-	"""
-	txn.validate_basics(as_coinbase=as_coinbase)
+	@classmethod
+	def validate_txn(cls,
+					 as_coinbase: bool = False,
+					 siblings_in_block: Iterable[Transaction] = None,
+					 allow_utxo_from_mempool: bool = True,
+					 ) -> bool:
+		"""
+		Validate a single transaction. Used in various contexts, so the
+		parameters facilitate different uses.
+		"""
+		cls.validate_basics(as_coinbase=as_coinbase)
 
-	available_to_spend = 0
+		available_to_spend = 0
 
-	for i, txin in enumerate(txn.txins):
-	    utxo = utxo_set.get(txin.to_spend)
+		for i, txin in enumerate(txn.txins):
+			utxo = utxo_set.get(txin.to_spend)
 
-	    if siblings_in_block:
-		utxo = utxo or find_utxo_in_list(txin, siblings_in_block)
+			if siblings_in_block:
+				utxo = utxo or find_utxo_in_list(txin, siblings_in_block)
 
-	    if allow_utxo_from_mempool:
-		utxo = utxo or find_utxo_in_mempool(txin)
+			if allow_utxo_from_mempool:
+				utxo = utxo or find_utxo_in_mempool(txin)
 
-	    if not utxo:
-		raise TxnValidationError(
-		    f'Could find no UTXO for TxIn[{i}] -- orphaning txn',
-		    to_orphan=txn)
+			if not utxo:
+				raise TxnValidationError(
+					f'Could find no UTXO for TxIn[{i}] -- orphaning txn',
+					to_orphan=cls)
 
-	    if utxo.is_coinbase and \
-		    (get_current_height() - utxo.height) < \
-		    Params.COINBASE_MATURITY:
-		raise TxnValidationError(f'Coinbase UTXO not ready for spend')
+			if utxo.is_coinbase and \
+					(get_current_height() - utxo.height) < \
+					Params.COINBASE_MATURITY:
+				raise TxnValidationError(f'Coinbase UTXO not ready for spend')
 
-	    try:
-		validate_signature_for_spend(txin, utxo, txn)
-	    except TxUnlockError:
-		raise TxnValidationError(f'{txin} is not a valid spend of {utxo}')
+			try:
+				validate_signature_for_spend(txin, utxo, cls)
+			except TxUnlockError:
+				raise TxnValidationError(f'{txin} is not a valid spend of {utxo}')
 
-	    available_to_spend += utxo.value
+			available_to_spend += utxo.value
 
-	if available_to_spend < sum(o.value for o in txn.txouts):
-	    raise TxnValidationError('Spend value is more than available')
+		if available_to_spend < sum(o.value for o in cls.txouts):
+			raise TxnValidationError('Spend value is more than available')
 
-	return txn
-
+		return True
 
 	def validate_signature_for_spend(txin, utxo: UnspentTxOut, txn):
 	    pubkey_as_addr = pubkey_to_address(txin.unlock_pk)

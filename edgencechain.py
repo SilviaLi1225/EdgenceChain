@@ -23,7 +23,8 @@ from typing import (
 
 import ecdsa
 from base58 import b58encode_check
-
+from utils import Utils
+from wallet import Wallet
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -40,8 +41,10 @@ def with_lock(lock):
         return wrapper
     return dec
 
-
-
+from dataStructure.DataStructure  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+                                          Block)
+from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
+from params.Params import Params
 
 
 
@@ -51,7 +54,7 @@ def with_lock(lock):
 # The highest proof-of-work, valid blockchain.
 #
 # #realname chainActive
-active_chain: Iterable[Block] = [genesis_block]
+active_chain: Iterable[Block] = [Params.genesis_block]
 
 # Branches off of the main chain.
 side_branches: Iterable[Iterable[Block]] = []
@@ -259,7 +262,7 @@ CHAIN_PATH = os.environ.get('TC_CHAIN_PATH', 'chain.dat')
 def save_to_disk():
     with open(CHAIN_PATH, "wb") as f:
         logger.info(f"saving chain with {len(active_chain)} blocks")
-        f.write(encode_socket_data(list(active_chain)))
+        f.write(Utils.encode_socket_data(list(active_chain)))
 
 @with_lock(chain_lock)
 def load_from_disk():
@@ -268,7 +271,7 @@ def load_from_disk():
     try:
         with open(CHAIN_PATH, "rb") as f:
             msg_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
-            new_blocks = deserialize(f.read(msg_len))
+            new_blocks = Utils.deserialize(f.read(msg_len))
             logger.info(f"loading chain from disk with {len(new_blocks)} blocks")
             for block in new_blocks:
                 connect_block(block)
@@ -337,7 +340,7 @@ def assemble_and_solve_block(pay_coinbase_to_addr, txns=None):
     block = block._replace(txns=[coinbase_txn, *block.txns])
     block = block._replace(merkle_hash=get_merkle_root_of_txns(block.txns).val)
 
-    if len(serialize(block)) > Params.MAX_BLOCK_SERIALIZED_SIZE:
+    if len(Utils.serialize(block)) > Params.MAX_BLOCK_SERIALIZED_SIZE:
         raise ValueError('txns specified create a block too large')
 
     return mine(block)
@@ -508,5 +511,5 @@ def main():
 
 
 if __name__ == '__main__':
-    signing_key, verifying_key, my_address = init_wallet()
+    signing_key, verifying_key, my_address = Wallet.init_wallet()
     main()
