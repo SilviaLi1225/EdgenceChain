@@ -16,10 +16,11 @@ import ecdsa
 from base58 import b58encode_check
 
 
-from dataStructure.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-								  Block)
+from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+                       Block)
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from params.Params import Params
+from p2p.Peer import Peer
 
 
 logging.basicConfig(
@@ -105,26 +106,30 @@ class Utils(object):
 		return cls.deserialize(data.decode()) if data else None
 
     @classmethod
-    def send_to_peer(cls, data, peer=None):
+    def send_to_peer(cls, data, peer)->bool:
 		"""Send a message to a (by default) random peer."""
-		global peer_hostnames
-	
-		peer = peer or random.choice(list(peer_hostnames))
+
+		#peer = peer or random.choice(list(peers))
+		if not isinstance(peer, Peer):
+			logger.error(f"{peer} is not instance of Peer class" )
+			return False
 		tries_left = 3
 	
 		while tries_left > 0:
 			try:
-				with socket.create_connection((peer, Params.PORT), timeout=1) as s:
+				ip, port = peer[0], peer[1]
+				with socket.create_connection((ip,port), timeout=1) as s:
 					s.sendall(cls.encode_socket_data(data))
+				return True
 			except Exception:
 				logger.exception(f'failed to send to peer {peer}')
 				tries_left -= 1
 				time.sleep(2)
 			else:
-				return
+				return False
 	
-		logger.info(f"[p2p] removing dead peer {peer}")
-		peer_hostnames = {x for x in peer_hostnames if x != peer}
+		#logger.info(f"[p2p] removing dead peer {peer}")
+		#peers = {x for x in peers if x != peer} #its the responsiblity of the sender to delete the dead peer
 
     @classmethod
     def int_to_8bytes(cls, a: int) -> bytes: 

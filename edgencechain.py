@@ -21,6 +21,8 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
+from p2p.P2P import (GetBlocksMsg, InvMsg, ThreadedTCPServer, TCPHandler)
+from p2p.Peer import Peer
 import ecdsa
 from base58 import b58encode_check
 from utils import Utils
@@ -41,8 +43,9 @@ def with_lock(lock):
         return wrapper
     return dec
 
-from dataStructure.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                                  Block)
+from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+                       Block)
+from ds.MerkleNode import MerkleNode
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from params.Params import Params
 
@@ -95,7 +98,7 @@ def locate_block(block_hash: str, chain=None) -> (Block, int, int):
 
 
 @with_lock(chain_lock)
-def connect_block(block: Union[str, Block],
+def connect_block(block: Union[str, Block], peers: Iterable[Peer],
                   doing_reorg=False,
                   ) -> Union[None, Block]:
     """Accept a block and return the chain index we append it to."""
@@ -146,8 +149,8 @@ def connect_block(block: Union[str, Block],
             f'block accepted '
             f'height={len(active_chain) - 1} txns={len(block.txns)}')
 
-    for peer in peer_hostnames:
-        send_to_peer(block, peer)
+    for peer in peers:
+        Utils.send_to_peer(block, peer)
 
     return chain_idx
 
@@ -377,7 +380,7 @@ def mine(block):
 
 def mine_forever():
     while True:
-        my_address = init_wallet()[2]
+        my_address = Wallet.init_wallet()[2]
         block = assemble_and_solve_block(my_address)
 
         if block:
@@ -410,7 +413,7 @@ def validate_block(block: Block) -> Block:
         logger.exception(f"Transaction {txn} in {block} failed to validate")
         raise BlockValidationError('Invalid txn {txn.id}')
 
-    if get_merkle_root_of_txns(block.txns).val != block.merkle_hash:
+    if MerkleNode.get_merkle_root_of_txns(block.txns).val != block.merkle_hash:
         raise BlockValidationError('Merkle hash invalid')
 
     if block.timestamp <= get_median_time_past(11):
@@ -441,7 +444,7 @@ def validate_block(block: Block) -> Block:
 
     for txn in block.txns[1:]:
         try:
-            validate_txn(txn, siblings_in_block=block.txns[1:],
+            txn.validate_txn(siblings_in_block=block.txns[1:],
                          allow_utxo_from_mempool=False)
         except TxnValidationError:
             msg = f"{txn} failed to validate"
@@ -453,42 +456,20 @@ def validate_block(block: Block) -> Block:
 
 
 
-# Peer-to-peer
-# ----------------------------------------------------------------------------
 
-peer_hostnames = {p for p in os.environ.get('TC_PEERS', '').split(',') if p}
 
 # Signal when the initial block download has completed.
 ibd_done = threading.Event()
 
 
-
-
-# Wallet
-# ----------------------------------------------------------------------------
-
-WALLET_PATH = os.environ.get('TC_WALLET_PATH', 'wallet.dat')
-
-
-
-
-
-# Misc. utilities
-# ----------------------------------------------------------------------------
-
-
-
-
-
-
-# Main
-# ----------------------------------------------------------------------------
-
-PORT = os.environ.get('TC_PORT', 9999)
+WALLET_PATH = 'wallet.dat'
+PORT = 9999
 
 
 def main():
     load_from_disk()
+    wallet = Wallet.init_wallet(WALLET_PATH)
+    peers = Peer.init_peers()
 
     workers = []
     server = ThreadedTCPServer(('0.0.0.0', PORT), TCPHandler)
@@ -500,10 +481,11 @@ def main():
     logger.info(f'[p2p] listening on {PORT}')
     start_worker(server.serve_forever)
 
-    if peer_hostnames:
+    if peers:
         logger.info(
-            f'start initial block download from {len(peer_hostnames)} peers')
-        send_to_peer(GetBlocksMsg(active_chain[-1].id))
+            f'start initial block download from {len(peers)} peers')
+        peer = random.choice(list(peers))
+        Utils.send_to_peer(GetBlocksMsg(active_chain[-1].id), peer)
         ibd_done.wait(60.)  # Wait a maximum of 60 seconds for IBD to complete.
 
     start_worker(mine_forever)
@@ -511,5 +493,5 @@ def main():
 
 
 if __name__ == '__main__':
-    signing_key, verifying_key, my_address = Wallet.init_wallet()
+
     main()

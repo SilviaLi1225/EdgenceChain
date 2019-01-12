@@ -1,4 +1,5 @@
-
+from ds.Transaction import Transaction
+from ds.Block import Block
 
 class BaseException(Exception):
     def __init__(self, msg):

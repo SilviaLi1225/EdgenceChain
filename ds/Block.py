@@ -13,10 +13,10 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from dataStructure.Block  import Block
-from dataStructure.UnspentTxOut import UnspentTxOut
-from  dataStructure.Transaction import (OutPoint, TxIn, TxOut, Transaction)
-from dataStructure.UTXO_Set import UTXO_Set
+
+from ds.UnspentTxOut import UnspentTxOut
+from  ds.Transaction import (OutPoint, TxIn, TxOut, Transaction)
+from ds.UTXO_Set import UTXO_Set
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from utils import Utils
 from params.Params import Params

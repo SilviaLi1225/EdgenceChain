@@ -8,7 +8,7 @@ from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, Bloc
 from utils.Utils import Utils
 from params.Params import Params
 from wallet.Wallet import Wallet
-from dataStructure.UnspentTxOut import UnspentTxOut
+from ds.UnspentTxOut import UnspentTxOut
 
 
 import binascii,ecdsa,logging,os

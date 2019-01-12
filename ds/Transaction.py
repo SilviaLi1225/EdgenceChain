@@ -6,10 +6,11 @@ from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, Bloc
 from utils.Utils import Utils
 from params.Params import Params
 from wallet.Wallet import Wallet
-from dataStructure.UnspentTxOut import UnspentTxOut
+from ds.UnspentTxOut import UnspentTxOut
+from ds.UTXO_Set import UTXO_Set
 
 
-import binascii,ecdsa,logging
+import binascii,ecdsa,logging,os
 
 
 
@@ -131,7 +132,7 @@ class Transaction(NamedTuple):
             utxo = utxo_set.get(txin.to_spend)
 
             if siblings_in_block:
-                utxo = utxo or find_utxo_in_list(txin, siblings_in_block)
+                utxo = utxo or UTXO_Set.find_utxo_in_list(txin, siblings_in_block)
 
             if allow_utxo_from_mempool:
                 utxo = utxo or find_utxo_in_mempool(txin)
@@ -153,7 +154,7 @@ class Transaction(NamedTuple):
 
             available_to_spend += utxo.value
 
-        if available_to_spend < sum(o.value for o in cls.txouts):
+        if available_to_spend < sum(o.value for o in self.txouts):
             raise TxnValidationError('Spend value is more than available')
 
         return True

@@ -5,9 +5,9 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from dataStructure.Block  import Block
-from dataStructure.UnspentTxOut import UnspentTxOut
-from dataStructure.Transaction import (OutPoint, TxIn, TxOut, Transaction)
+from ds.Block  import Block
+from ds.UnspentTxOut import UnspentTxOut
+from ds.Transaction import (OutPoint, TxIn, TxOut, Transaction)
 from params.Params import Params
 from utils.Utils import Utils
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
@@ -20,12 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 class MemPool(object):
-    def __init__(self):
+    def __init__(self, peers:Iterable[Params.Peer]):
         self.mempool: Dict[str, Transaction] = {}
 
         # Set of orphaned (i.e. has inputs referencing yet non-existent UTXOs)
         # transactions.
         self.orphan_txns: Iterable[Transaction] = []
+        self.peers = peers
 
 
     def find_utxo_in_mempool(self,txin) -> UnspentTxOut:
@@ -109,5 +110,5 @@ class MemPool(object):
             logger.info(f'txn {txn.id} added to mempool')
             self.mempool[txn.id] = txn
 
-            for peer in peer_hostnames:
+            for peer in self.peers:
                 Utils.send_to_peer(txn, peer)

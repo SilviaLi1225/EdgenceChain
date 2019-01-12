@@ -13,7 +13,7 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from dataStructure.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
                                   Block)
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from utils import Utils
@@ -21,7 +21,7 @@ from params.Params import Params
 
 import ecdsa
 from base58 import b58encode_check
-
+from p2p.Peer import Peer
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -37,8 +37,8 @@ class GetBlocksMsg(NamedTuple):  # Request blocks during initial sync
 
     CHUNK_SIZE = 50
 
-    def handle(self, sock, peer_hostname):
-        logger.debug(f"[p2p] recv getblocks from {peer_hostname}")
+    def handle(self, sock, peer, chain_lock):
+        logger.debug(f"[p2p] recv getblocks from {peer}")
 
         _, height, _ = locate_block(self.from_blockid, active_chain)
 
@@ -49,15 +49,14 @@ class GetBlocksMsg(NamedTuple):  # Request blocks during initial sync
         with chain_lock:
             blocks = active_chain[height:(height + self.CHUNK_SIZE)]
 
-        logger.debug(f"[p2p] sending {len(blocks)} to {peer_hostname}")
-        Utils.send_to_peer(InvMsg(blocks), peer_hostname)
-
+        logger.debug(f"[p2p] sending {len(blocks)} to {peer}")
+        Utils.send_to_peer(InvMsg(blocks), peer)
 
 class InvMsg(NamedTuple):  # Convey blocks to a peer who is doing initial sync
     blocks: Iterable[str]
 
-    def handle(self, sock, peer_hostname):
-        logger.info(f"[p2p] recv inv from {peer_hostname}")
+    def handle(self, sock, peer, chain_lock):
+        logger.info(f"[p2p] recv inv from {peer}")
 
         new_blocks = [b for b in self.blocks if not locate_block(b.id)[0]]
 
@@ -76,27 +75,29 @@ class InvMsg(NamedTuple):  # Convey blocks to a peer who is doing initial sync
             # "Recursive" call to continue the initial block sync.
             Utils.send_to_peer(GetBlocksMsg(new_tip_id))
 
-
-
-
-
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass
 
-
 class TCPHandler(socketserver.BaseRequestHandler):
+    def __init__(self, chain_lock):
+        self.chain_lock = chain_lock
 
-    def handle(self):
+    def handle(self, peers:Iterable[Peer]):
         data = Utils.read_all_from_socket(self.request)
-        peer_hostname = self.request.getpeername()[0]
-        peer_hostnames.add(peer_hostname)
+        peer = self.request.getpeername()[0]
+        for idx, peer_registered in enumerate(peers):
+            if peer.ip == peer_registered.ip and peer.port == peer_registered.port:
+                break
+            elif idx + 1 == len(peers):
+                peers.append(peer)
 
         if hasattr(data, 'handle') and isinstance(data.handle, Callable):
-            logger.info(f'received msg {data} from peer {peer_hostname}')
-            data.handle(self.request, peer_hostname)
+            logger.info(f'received msg {data} from peer {peer}')
+            
+            data.handle(self.request, peer)
         elif isinstance(data, Transaction):
-            logger.info(f"received txn {data.id} from peer {peer_hostname}")
+            logger.info(f"received txn {data.id} from peer {peer}")
             add_txn_to_mempool(data)
         elif isinstance(data, Block):
-            logger.info(f"received block {data.id} from peer {peer_hostname}")
+            logger.info(f"received block {data.id} from peer {peer}")
             connect_block(data)

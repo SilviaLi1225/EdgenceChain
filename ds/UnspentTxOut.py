@@ -2,7 +2,7 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from  dataStructure.Transaction import OutPoint
+from  ds.Transaction import OutPoint
 
 
 class UnspentTxOut(NamedTuple):

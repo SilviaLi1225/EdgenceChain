@@ -1,3 +1,11 @@
+
+from typing import (
+    Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
+    Callable)
+from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+                       Block)
+from p2p.Peer import Peer
+
 class Params:
     # The infamous max block size.
     MAX_BLOCK_SERIALIZED_SIZE = 1000000  # bytes = 1MB
@@ -50,15 +58,24 @@ class Params:
 
 
     genesis_block = Block(
-	version=0, prev_block_hash=None,
-	merkle_hash=(
-	    '7118894203235a955a908c0abfc6d8fe6edec47b0a04ce1bf7263da3b4366d22'),
-	timestamp=1501821412, bits=24, nonce=10126761,
-	txns=[Transaction(
-	    txins=[TxIn(
-		to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
-	    txouts=[TxOut(
-		value=5000000000,
-		to_address='143UVyz7ooiAv1pMqbwPPpnH4BV9ifJGFF')], locktime=None)])
-
+        version=0,
+        prev_block_hash=None,
+        merkle_hash=(
+            '7118894203235a955a908c0abfc6d8fe6edec47b0a04ce1bf7263da3b4366d22'),
+        timestamp=1501821412,
+        bits=24,
+        nonce=10126761,
+        txns=[Transaction(
+                txins=[TxIn(
+                    to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
+                txouts=[TxOut(
+                    value=5000000000,
+                    to_address='143UVyz7ooiAv1pMqbwPPpnH4BV9ifJGFF')],
+                locktime=None)]
+        )
+    # list of peers
+    PEERS_FILE =  'peers.conf'
+    PEERS: Iterable[Peer] = list([Peer('127.0.0.1', 9999),
+                      Peer('127.0.0.1', 9998),
+                      Peer('localhost', 9999)])
 

@@ -1,30 +1,70 @@
+import binascii
+import time
+import json
+import hashlib
+import threading
+import logging
+import socketserver
+import socket
+import random
+import os
+from functools import lru_cache, wraps
+from typing import (
+    Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
+    Callable)
+
+from p2p.P2P import (GetBlocksMsg, InvMsg, ThreadedTCPServer, TCPHandler)
+from p2p.Peer import Peer
+import ecdsa
+from base58 import b58encode_check
+from utils import Utils
+
+
+logging.basicConfig(
+    level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
+    format='[%(asctime)s][%(module)s:%(lineno)d] %(levelname)s %(message)s')
+logger = logging.getLogger(__name__)
+
+
+
 class Wallet(object):
 
-    @classmethod
-    def pubkey_to_address(cls, pubkey: bytes) -> str:
-	if 'ripemd160' not in hashlib.algorithms_available:
-	    raise RuntimeError('missing ripemd160 hash algorithm')
+	def __init__(self, signing_key, verifying_key, my_address):
 
-	sha = hashlib.sha256(pubkey).digest()
-	ripe = hashlib.new('ripemd160', sha).digest()
-	return b58encode_check(b'\x00' + ripe)
+		self.signing_key = signing_key
+		self.verifying_key  = verifying_key
+		self.my_address = my_address
+	def get(self):
+		return self.signing_key, self.verifying_key, self.my_address
 
-    @classmethod
-    @lru_cache()
-    def init_wallet(cls, path=None):
+	@classmethod
+	def pubkey_to_address(cls, pubkey: bytes) -> str:
+		if 'ripemd160' not in hashlib.algorithms_available:
+			raise RuntimeError('missing ripemd160 hash algorithm')
 
-	if os.path.exists(path):
-	    with open(path, 'rb') as f:
-		signing_key = ecdsa.SigningKey.from_string(
-		    f.read(), curve=ecdsa.SECP256k1)
-	else:
-	    logger.info(f"generating new wallet: '{path}'")
-	    signing_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
-	    with open(path, 'wb') as f:
-		f.write(signing_key.to_string())
+		sha = hashlib.sha256(pubkey).digest()
+		ripe = hashlib.new('ripemd160', sha).digest()
+		return str(b58encode_check(b'\x00' + ripe))
 
-	verifying_key = signing_key.get_verifying_key()
-	my_address = pubkey_to_address(verifying_key.to_string())
-	logger.info(f"your address is {my_address}")
 
-	return signing_key, verifying_key, my_address
+
+	@classmethod
+	@lru_cache()
+	def init_wallet(cls, path='wallet.dat'):
+		cls.path = path
+
+		if os.path.exists(path):
+			with open(path, 'rb') as f:
+				signing_key = ecdsa.SigningKey.from_string(
+					f.read(), curve=ecdsa.SECP256k1)
+		else:
+			logger.info(f"generating new wallet: '{path}'")
+			signing_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+			with open(path, 'wb') as f:
+				f.write(signing_key.to_string())
+
+		verifying_key = signing_key.get_verifying_key()
+		my_address = Wallet.pubkey_to_address(verifying_key.to_string())
+		logger.info(f"your address is {my_address}")
+
+		return cls(signing_key, verifying_key, my_address)
