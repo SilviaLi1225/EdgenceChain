@@ -93,7 +93,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
         if hasattr(data, 'handle') and isinstance(data.handle, Callable):
             logger.info(f'received msg {data} from peer {peer}')
-            
+
             data.handle(self.request, peer)
         elif isinstance(data, Transaction):
             logger.info(f"received txn {data.id} from peer {peer}")

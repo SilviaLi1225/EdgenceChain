@@ -23,6 +23,9 @@ from typing import (
 
 from p2p.P2P import (GetBlocksMsg, InvMsg, ThreadedTCPServer, TCPHandler)
 from p2p.Peer import Peer
+from ds.UTXO_Set import UTXO_Set
+from ds.MemPool import MemPool
+from ds.MerkleNode import MerkleNode
 import ecdsa
 from base58 import b58encode_check
 from utils import Utils
@@ -98,7 +101,7 @@ def locate_block(block_hash: str, chain=None) -> (Block, int, int):
 
 
 @with_lock(chain_lock)
-def connect_block(block: Union[str, Block], peers: Iterable[Peer],
+def connect_block(block: Union[str, Block], peers: Iterable[Peer], mempool: MemPool, utxo_set:UTXO_Set,
                   doing_reorg=False,
                   ) -> Union[None, Block]:
     """Accept a block and return the chain index we append it to."""
@@ -134,13 +137,13 @@ def connect_block(block: Union[str, Block], peers: Iterable[Peer],
     # If we added to the active chain, perform upkeep on utxo_set and mempool.
     if chain_idx == ACTIVE_CHAIN_IDX:
         for tx in block.txns:
-            mempool.pop(tx.id, None)
+            mempool.mempool.pop(tx.id, None)
 
             if not tx.is_coinbase:
                 for txin in tx.txins:
-                    rm_from_utxo(*txin.to_spend)
+                    utxo_set.rm_from_utxo(*txin.to_spend)
             for i, txout in enumerate(tx.txouts):
-                add_to_utxo(txout, tx, i, tx.is_coinbase, len(chain))
+                utxo_set.add_to_utxo(txout, tx, i, tx.is_coinbase, len(chain))
 
     if (not doing_reorg and reorg_if_necessary()) or \
             chain_idx == ACTIVE_CHAIN_IDX:
@@ -156,19 +159,19 @@ def connect_block(block: Union[str, Block], peers: Iterable[Peer],
 
 
 @with_lock(chain_lock)
-def disconnect_block(block, chain=None):
+def disconnect_block(block, mempool:MemPool, utxo_set: UTXO_Set, chain=None):
     chain = chain or active_chain
     assert block == chain[-1], "Block being disconnected must be tip."
 
     for tx in block.txns:
-        mempool[tx.id] = tx
+        mempool.mempool[tx.id] = tx
 
         # Restore UTXO set to what it was before this block.
         for txin in tx.txins:
             if txin.to_spend:  # Account for degenerate coinbase txins.
-                add_to_utxo(*find_txout_for_txin(txin, chain))
+                utxo_set.add_to_utxo(*find_txout_for_txin(txin, chain))
         for i in range(len(tx.txouts)):
-            rm_from_utxo(tx.id, i)
+            utxo_set.rm_from_utxo(tx.id, i)
 
     logger.info(f'block {block.id} disconnected')
     return chain.pop()
@@ -316,7 +319,7 @@ def get_next_work_required(prev_block_hash: str) -> int:
         return prev_block.bits
 
 
-def assemble_and_solve_block(pay_coinbase_to_addr, txns=None):
+def assemble_and_solve_block(pay_coinbase_to_addr, mempool:MemPool, wallet, utxo_set:UTXO_Set, txns=None):
     """
     Construct a Block by pulling transactions from the mempool, then mine it.
     """
@@ -334,14 +337,14 @@ def assemble_and_solve_block(pay_coinbase_to_addr, txns=None):
     )
 
     if not block.txns:
-        block = select_from_mempool(block)
+        block = mempool.select_from_mempool(block)
 
-    fees = calculate_fees(block)
-    my_address = init_wallet()[2]
+    fees = block.calculate_fees(utxo_set.get())
+    my_address = wallet.get()[2]
     coinbase_txn = Transaction.create_coinbase(
-        my_address, (get_block_subsidy() + fees), len(active_chain))
+        my_address, (Block.get_block_subsidy(active_chain) + fees), len(active_chain))
     block = block._replace(txns=[coinbase_txn, *block.txns])
-    block = block._replace(merkle_hash=get_merkle_root_of_txns(block.txns).val)
+    block = block._replace(merkle_hash=MerkleNode.get_merkle_root_of_txns(block.txns).val)
 
     if len(Utils.serialize(block)) > Params.MAX_BLOCK_SERIALIZED_SIZE:
         raise ValueError('txns specified create a block too large')
@@ -466,10 +469,14 @@ WALLET_PATH = 'wallet.dat'
 PORT = 9999
 
 
+
+
 def main():
     load_from_disk()
     wallet = Wallet.init_wallet(WALLET_PATH)
     peers = Peer.init_peers()
+    utxo_set = UTXO_Set()   #utxo_set.get()
+    mempool = MemPool()
 
     workers = []
     server = ThreadedTCPServer(('0.0.0.0', PORT), TCPHandler)

@@ -13,16 +13,14 @@ from utils.Utils import Utils
 
 
 class GetUTXOsMsg(NamedTuple):  # List all UTXOs
-    def handle(self, sock, peer):
-        sock.sendall(Utils.encode_socket_data(list(utxo_set.items())))
-
+    def handle(self, sock, utxo_set):
+        sock.sendall(Utils.encode_socket_data(list(utxo_set.get().items())))
 
 class GetMempoolMsg(NamedTuple):  # List the mempool
-    def handle(self, sock, peer):
+    def handle(self, sock,mempool):
         sock.sendall(Utils.encode_socket_data(list(mempool.keys())))
 
-
 class GetActiveChainMsg(NamedTuple):  # Get the active chain in its entirety.
-    def handle(self, sock, peer):
+    def handle(self, sock, active_chain):
         sock.sendall(Utils.encode_socket_data(list(active_chain)))
 

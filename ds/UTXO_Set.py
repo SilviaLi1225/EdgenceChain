@@ -27,6 +27,8 @@ class UTXO_Set(object):
 
     def __init__(self):
         self.utxoSet: Mapping[OutPoint, UnspentTxOut] = {}
+    def get(self):
+        return self.utxoSet()
 
 
     def add_to_utxo(self, txout, tx, idx, is_coinbase, height):

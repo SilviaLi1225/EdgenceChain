@@ -8,6 +8,7 @@ from typing import (
 from ds.Block  import Block
 from ds.UnspentTxOut import UnspentTxOut
 from ds.Transaction import (OutPoint, TxIn, TxOut, Transaction)
+from ds.UTXO_Set import UTXO_Set
 from params.Params import Params
 from utils.Utils import Utils
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
@@ -20,13 +21,14 @@ logger = logging.getLogger(__name__)
 
 
 class MemPool(object):
-    def __init__(self, peers:Iterable[Params.Peer]):
+    def __init__(self):
         self.mempool: Dict[str, Transaction] = {}
 
         # Set of orphaned (i.e. has inputs referencing yet non-existent UTXOs)
         # transactions.
         self.orphan_txns: Iterable[Transaction] = []
-        self.peers = peers
+    def get(self):
+        return self.mempool
 
 
     def find_utxo_in_mempool(self,txin) -> UnspentTxOut:
@@ -42,7 +44,7 @@ class MemPool(object):
             *txout, txid=txid, is_coinbase=False, height=-1, txout_idx=idx)
 
 
-    def select_from_mempool(self, block: Block) -> Block:
+    def select_from_mempool(self, block: Block, utxo_set:UTXO_Set) -> Block:
         """Fill a Block with transactions from the mempool."""
         added_to_block = set()
 
@@ -59,7 +61,7 @@ class MemPool(object):
             # transaction in the mempool (if it exists) and add it to the block.
 
             for txin in tx.txins:
-                if txin.to_spend in utxo_set:
+                if txin.to_spend in utxo_set.get():
                     continue
 
                 in_mempool = self.find_utxo_in_mempool(txin)
@@ -93,7 +95,7 @@ class MemPool(object):
         return block
 
 
-    def add_txn_to_mempool(self, txn: Transaction):
+    def add_txn_to_mempool(self, txn: Transaction, peers):
         if txn.id in self.mempool:
             logger.info(f'txn {txn.id} already seen')
             return
@@ -110,5 +112,5 @@ class MemPool(object):
             logger.info(f'txn {txn.id} added to mempool')
             self.mempool[txn.id] = txn
 
-            for peer in self.peers:
+            for peer in peers:
                 Utils.send_to_peer(txn, peer)
