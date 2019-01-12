@@ -41,8 +41,8 @@ def with_lock(lock):
         return wrapper
     return dec
 
-from dataStructure.DataStructure  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                                          Block)
+from dataStructure.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+                                  Block)
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from params.Params import Params
 

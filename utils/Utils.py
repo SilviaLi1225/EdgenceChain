@@ -16,8 +16,8 @@ import ecdsa
 from base58 import b58encode_check
 
 
-from dataStructure.DataStructure  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                                          Block)
+from dataStructure.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+								  Block)
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from params.Params import Params
 

@@ -13,8 +13,8 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from dataStructure.DataStructure  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                                          Block)
+from dataStructure.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
+                                  Block)
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from utils import Utils
 from params.Params import Params
