@@ -106,10 +106,8 @@ class Block(NamedTuple):
         if halvings >= 64:
             return 0
 
-        return 50 * Params.LET_PER_COIN // (2 ** halvings
+        return 50 * Params.LET_PER_COIN // (2 ** halvings)
 
-# Merkle trees
-# ----------------------------------------------------------------------------
 
 
 
