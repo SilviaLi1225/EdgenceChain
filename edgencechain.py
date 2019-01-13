@@ -364,7 +364,7 @@ def mine(block):
     target = (1 << (256 - block.bits))
     mine_interrupt.clear()
 
-    while int(sha256d(block.header(nonce)), 16) >= target:
+    while int(Utils.sha256d(block.header(nonce)), 16) >= target:
         nonce += 1
 
         if nonce % 10000 == 0 and mine_interrupt.is_set():
