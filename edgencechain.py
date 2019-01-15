@@ -179,6 +179,11 @@ class Transaction(NamedTuple):
     txins: Iterable[TxIn]
     txouts: Iterable[TxOut]
 
+    serviceid: str = 'serviceid'
+    postid: str = 'postid'
+    actionid: int = 0
+    data: Iterable[int] = list(range(1,10))
+
     # The block number or timestamp at which this transaction is unlocked.
     # < 500000000: Block number at which this transaction is unlocked.
     # >= 500000000: UNIX timestamp at which this transaction is unlocked.
