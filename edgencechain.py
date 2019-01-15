@@ -37,6 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+<<<<<<< HEAD
 def with_lock(lock):
     def dec(func):
         @wraps(func)
@@ -45,6 +46,165 @@ def with_lock(lock):
                 return func(*args, **kwargs)
         return wrapper
     return dec
+=======
+class Params:
+    # The infamous max block size.
+    MAX_BLOCK_SERIALIZED_SIZE = 1000000  # bytes = 1MB
+
+    # Coinbase transaction outputs can be spent after this many blocks have
+    # elapsed since being mined.
+    #
+    # This is "100" in bitcoin core.
+    COINBASE_MATURITY = 2
+
+    # Accept blocks timestamped as being from the future, up to this amount.
+    MAX_FUTURE_BLOCK_TIME = (60 * 60 * 2)
+
+    # The number of LET per coin. #realname COIN
+    LET_PER_COIN = int(100e6)
+
+    TOTAL_COINS = 21_000_000
+
+    # The maximum number of Lets that will ever be found.
+    MAX_MONEY = LET_PER_COIN * TOTAL_COINS
+
+    # The duration we want to pass between blocks being found, in seconds.
+    # This is lower than Bitcoin's configuation (10 * 60).
+    #
+    # #realname PowTargetSpacing
+    TIME_BETWEEN_BLOCKS_IN_SECS_TARGET = 1 * 60
+
+    # The number of seconds we want a difficulty period to last.
+    #
+    # Note that this differs considerably from the behavior in Bitcoin, which
+    # is configured to target difficulty periods of (10 * 2016) minutes.
+    #
+    # #realname PowTargetTimespan
+    DIFFICULTY_PERIOD_IN_SECS_TARGET = (60 * 60 * 10)
+
+    # After this number of blocks are found, adjust difficulty.
+    #
+    # #realname DifficultyAdjustmentInterval
+    DIFFICULTY_PERIOD_IN_BLOCKS = (
+        DIFFICULTY_PERIOD_IN_SECS_TARGET / TIME_BETWEEN_BLOCKS_IN_SECS_TARGET)
+
+    # The number of right-shifts applied to 2 ** 256 in order to create the
+    # initial difficulty target necessary for mining a block.
+    INITIAL_DIFFICULTY_BITS = 24
+
+    # The number of blocks after which the mining subsidy will halve.
+    #
+    # #realname SubsidyHalvingInterval
+    HALVE_SUBSIDY_AFTER_BLOCKS_NUM = 210_000
+
+
+# Used to represent the specific output within a transaction.
+OutPoint = NamedTuple('OutPoint', [('txid', str), ('txout_idx', int)])
+
+
+class TxIn(NamedTuple):
+    """Inputs to a Transaction."""
+    # A reference to the output we're spending. This is None for coinbase
+    # transactions.
+    to_spend: Union[OutPoint, None]
+
+    # The (signature, pubkey) pair which unlocks the TxOut for spending.
+    unlock_sig: bytes
+    unlock_pk: bytes
+
+    # A sender-defined sequence number which allows us replacement of the txn
+    # if desired.
+    sequence: int
+
+
+class TxOut(NamedTuple):
+    """Outputs from a Transaction."""
+    # The number of LET this awards.
+    value: int
+
+    # The public key of the owner of this Txn.
+    to_address: str
+
+
+class UnspentTxOut(NamedTuple):
+    value: int
+    to_address: str
+
+    # The ID of the transaction this output belongs to.
+    txid: str
+    txout_idx: int
+
+    # Did this TxOut from from a coinbase transaction?
+    is_coinbase: bool
+
+    # The blockchain height this TxOut was included in the chain.
+    height: int
+
+    @property
+    def outpoint(self): return OutPoint(self.txid, self.txout_idx)
+
+
+class Transaction(NamedTuple):
+    txins: Iterable[TxIn]
+    txouts: Iterable[TxOut]
+
+    serviceid: str = 'serviceid'
+    postid: str = 'postid'
+    actionid: int = 0
+    data: Iterable[int] = list(range(1,10))
+
+    # The block number or timestamp at which this transaction is unlocked.
+    # < 500000000: Block number at which this transaction is unlocked.
+    # >= 500000000: UNIX timestamp at which this transaction is unlocked.
+    locktime: int = None
+
+    @property
+    def is_coinbase(self) -> bool:
+        return len(self.txins) == 1 and self.txins[0].to_spend is None
+
+    @classmethod
+    def create_coinbase(cls, pay_to_addr, value, height):
+        return cls(
+            txins=[TxIn(
+                to_spend=None,
+                # Push current block height into unlock_sig so that this
+                # transaction's ID is unique relative to other coinbase txns.
+                unlock_sig=str(height).encode(),
+                unlock_pk=None,
+                sequence=0)],
+            txouts=[TxOut(
+                value=value,
+                to_address=pay_to_addr)],
+        )
+
+    @property
+    def id(self) -> str:
+        return sha256d(serialize(self))
+
+    def validate_basics(self, as_coinbase=False):
+        if (not self.txouts) or (not self.txins and not as_coinbase):
+            raise TxnValidationError('Missing txouts or txins')
+
+        if len(serialize(self)) > Params.MAX_BLOCK_SERIALIZED_SIZE:
+            raise TxnValidationError('Too large')
+
+        if sum(t.value for t in self.txouts) > Params.MAX_MONEY:
+            raise TxnValidationError('Spend value too high')
+
+
+class Block(NamedTuple):
+    # A version integer.
+    version: int
+
+    # A hash of the previous block's header.
+    prev_block_hash: str
+
+    # A hash of the Merkle tree containing all txns.
+    merkle_hash: str
+
+    # A UNIX timestamp of when this block was created.
+    timestamp: int
+>>>>>>> 5e34533651f62db955f8eefe8d046b22477026ac
 
 
 from ds.Block import Block
@@ -65,6 +225,21 @@ from _thread import RLock
 # Chain
 # ----------------------------------------------------------------------------
 
+<<<<<<< HEAD
+=======
+genesis_block = Block(
+    version=0, prev_block_hash=None,
+    merkle_hash=(
+        '561878ea68f85289f997c4ce2d7902205f6ff41b1cbf6626e0e1ad8a14fd71c5'),
+    timestamp=1501821412, bits=24, nonce=7624554,
+    txns=[Transaction(
+        txins=[TxIn(
+            to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
+        txouts=[TxOut(
+            value=5000000000,
+            to_address='143UVyz7ooiAv1pMqbwPPpnH4BV9ifJGFF')], locktime=None)])
+
+>>>>>>> 5e34533651f62db955f8eefe8d046b22477026ac
 # The highest proof-of-work, valid blockchain.
 #
 # #realname chainActive
@@ -410,6 +585,211 @@ PORT = 9999
 
 
 
+<<<<<<< HEAD
+=======
+class GetActiveChainMsg(NamedTuple):  # Get the active chain in its entirety.
+    def handle(self, sock, peer_hostname):
+        sock.sendall(encode_socket_data(list(active_chain)))
+
+
+class AddPeerMsg(NamedTuple):
+    peer_hostname: str
+
+    def handle(self, sock, peer_hostname):
+        peer_hostnames.add(self.peer_hostname)
+
+
+def read_all_from_socket(req) -> object:
+    data = b''
+    # Our protocol is: first 4 bytes signify msg length.
+    msg_len = int(binascii.hexlify(req.recv(4) or b'\x00'), 16)
+
+    while msg_len > 0:
+        tdat = req.recv(1024)
+        data += tdat
+        msg_len -= len(tdat)
+
+    return deserialize(data.decode()) if data else None
+
+
+def send_to_peer(data, peer=None):
+    """Send a message to a (by default) random peer."""
+    global peer_hostnames
+
+    peer = peer or random.choice(list(peer_hostnames))
+    tries_left = 3
+
+    while tries_left > 0:
+        try:
+            with socket.create_connection((peer, PORT), timeout=1) as s:
+                s.sendall(encode_socket_data(data))
+        except Exception:
+            logger.exception(f'failed to send to peer {peer}')
+            tries_left -= 1
+            time.sleep(2)
+        else:
+            return
+
+    logger.info(f"[p2p] removing dead peer {peer}")
+    peer_hostnames = {x for x in peer_hostnames if x != peer}
+
+
+def int_to_8bytes(a: int) -> bytes: return binascii.unhexlify(f"{a:0{8}x}")
+
+
+def encode_socket_data(data: object) -> bytes:
+    """Our protocol is: first 4 bytes signify msg length."""
+    to_send = serialize(data).encode()
+    return int_to_8bytes(len(to_send)) + to_send
+
+
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    pass
+
+
+class TCPHandler(socketserver.BaseRequestHandler):
+
+    def handle(self):
+        data = read_all_from_socket(self.request)
+        peer_hostname = self.request.getpeername()[0]
+        peer_hostnames.add(peer_hostname)
+
+        if hasattr(data, 'handle') and isinstance(data.handle, Callable):
+            logger.info(f'received msg {data} from peer {peer_hostname}')
+            data.handle(self.request, peer_hostname)
+        elif isinstance(data, Transaction):
+            logger.info(f"received txn {data.id} from peer {peer_hostname}")
+            add_txn_to_mempool(data)
+        elif isinstance(data, Block):
+            logger.info(f"received block {data.id} from peer {peer_hostname}")
+            connect_block(data)
+
+
+# Wallet
+# ----------------------------------------------------------------------------
+
+WALLET_PATH = os.environ.get('TC_WALLET_PATH', 'wallet.dat')
+
+
+def pubkey_to_address(pubkey: bytes) -> str:
+    if 'ripemd160' not in hashlib.algorithms_available:
+        raise RuntimeError('missing ripemd160 hash algorithm')
+
+    sha = hashlib.sha256(pubkey).digest()
+    ripe = hashlib.new('ripemd160', sha).digest()
+    return str(b58encode_check(b'\x00' + ripe), encoding='utf8')
+
+
+@lru_cache()
+def init_wallet(path=None):
+    path = path or WALLET_PATH
+
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            signing_key = ecdsa.SigningKey.from_string(
+                f.read(), curve=ecdsa.SECP256k1)
+    else:
+        logger.info(f"generating new wallet: '{path}'")
+        signing_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        with open(path, 'wb') as f:
+            f.write(signing_key.to_string())
+
+    verifying_key = signing_key.get_verifying_key()
+    my_address = pubkey_to_address(verifying_key.to_string())
+    logger.info(f"your address is {my_address}")
+
+    return signing_key, verifying_key, my_address
+
+
+# Misc. utilities
+# ----------------------------------------------------------------------------
+
+class BaseException(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
+
+class TxUnlockError(BaseException):
+    pass
+
+
+class TxnValidationError(BaseException):
+    def __init__(self, *args, to_orphan: Transaction = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.to_orphan = to_orphan
+
+
+class BlockValidationError(BaseException):
+    def __init__(self, *args, to_orphan: Block = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.to_orphan = to_orphan
+
+
+def serialize(obj) -> str:
+    """NamedTuple-flavored serialization to JSON."""
+    def contents_to_primitive(o):
+        if hasattr(o, '_asdict'):
+            o = {**o._asdict(), '_type': type(o).__name__}
+        elif isinstance(o, (list, tuple)):
+            return [contents_to_primitive(i) for i in o]
+        elif isinstance(o, bytes):
+            return binascii.hexlify(o).decode()
+        elif not isinstance(o, (dict, bytes, str, int, type(None))):
+            raise ValueError(f"Can't serialize {o}")
+
+        if isinstance(o, Mapping):
+            for k, v in o.items():
+                o[k] = contents_to_primitive(v)
+
+        return o
+
+    return json.dumps(
+        contents_to_primitive(obj), sort_keys=True, separators=(',', ':'))
+
+
+def deserialize(serialized: str) -> object:
+    """NamedTuple-flavored serialization from JSON."""
+    gs = globals()
+
+    def contents_to_objs(o):
+        if isinstance(o, list):
+            return [contents_to_objs(i) for i in o]
+        elif not isinstance(o, Mapping):
+            return o
+
+        _type = gs[o.pop('_type', None)]
+        bytes_keys = {
+            k for k, v in get_type_hints(_type).items() if v == bytes}
+
+        for k, v in o.items():
+            o[k] = contents_to_objs(v)
+
+            if k in bytes_keys:
+                o[k] = binascii.unhexlify(o[k]) if o[k] else o[k]
+
+        return _type(**o)
+
+    return contents_to_objs(json.loads(serialized))
+
+
+def sha256d(s: Union[str, bytes]) -> str:
+    """A double SHA-256 hash."""
+    if not isinstance(s, bytes):
+        s = s.encode()
+
+    return hashlib.sha256(hashlib.sha256(s).digest()).hexdigest()
+
+
+def _chunks(l, n) -> Iterable[Iterable]:
+    return (l[i:i + n] for i in range(0, len(l), n))
+
+
+# Main
+# ----------------------------------------------------------------------------
+
+PORT = os.environ.get('TC_PORT', 9999)
+
+>>>>>>> 5e34533651f62db955f8eefe8d046b22477026ac
 
 def main():
     load_from_disk()
