@@ -20,7 +20,7 @@ import socket
 
 from docopt import docopt
 
-import edgencechain as t
+import main as t
 
 
 logging.basicConfig(
