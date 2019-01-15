@@ -8,6 +8,9 @@ from params.Params import Params
 from wallet.Wallet import Wallet
 from ds.UnspentTxOut import UnspentTxOut
 from ds.UTXO_Set import UTXO_Set
+from ds.MemPool import MemPool
+from ds.TxIn import TxIn
+from ds.TxOut import TxOut
 
 
 import binascii,ecdsa,logging,os
@@ -20,32 +23,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Used to represent the specific output within a transaction.
-OutPoint = NamedTuple('OutPoint', [('txid', str), ('txout_idx', int)])
-
-
-class TxIn(NamedTuple):
-    """Inputs to a Transaction."""
-    # A reference to the output we're spending. This is None for coinbase
-    # transactions.
-    to_spend: Union[OutPoint, None]
-
-    # The (signature, pubkey) pair which unlocks the TxOut for spending.
-    unlock_sig: bytes
-    unlock_pk: bytes
-
-    # A sender-defined sequence number which allows us replacement of the txn
-    # if desired.
-    sequence: int
-
-
-class TxOut(NamedTuple):
-    """Outputs from a Transaction."""
-    # The number of LET this awards.
-    value: int
-
-    # The public key of the owner of this Txn.
-    to_address: str
-
 
 class Transaction(NamedTuple):
     txins: Iterable[TxIn]
@@ -91,6 +68,8 @@ class Transaction(NamedTuple):
 
 
     def validate_txn(self,
+                     utxo_set: UTXO_Set,
+                     mempool: MemPool,
                      as_coinbase: bool = False,
                      siblings_in_block: Iterable[object] = None,  #object
                      allow_utxo_from_mempool: bool = True,
@@ -99,7 +78,6 @@ class Transaction(NamedTuple):
         Validate a single transaction. Used in various contexts, so the
         parameters facilitate different uses.
         """
-
         def validate_signature_for_spend(txin, utxo: UnspentTxOut, txn):
             def build_spend_message(to_spend, pk, sequence, txouts) -> bytes:
                 """This should be ~roughly~ equivalent to SIGHASH_ALL."""
@@ -129,13 +107,13 @@ class Transaction(NamedTuple):
         available_to_spend = 0
 
         for i, txin in enumerate(self.txins):
-            utxo = utxo_set.get(txin.to_spend)
+            utxo = utxo_set.get().get(txin.to_spend)
 
             if siblings_in_block:
                 utxo = utxo or UTXO_Set.find_utxo_in_list(txin, siblings_in_block)
 
             if allow_utxo_from_mempool:
-                utxo = utxo or find_utxo_in_mempool(txin)
+                utxo = utxo or mempool.find_utxo_in_mempool(txin)
 
             if not utxo:
                 raise TxnValidationError(

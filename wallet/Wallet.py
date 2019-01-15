@@ -1,23 +1,10 @@
-import binascii
-import time
-import json
 import hashlib
-import threading
 import logging
-import socketserver
-import socket
-import random
 import os
-from functools import lru_cache, wraps
-from typing import (
-    Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
-    Callable)
-
-from p2p.P2P import (GetBlocksMsg, InvMsg, ThreadedTCPServer, TCPHandler)
-from p2p.Peer import Peer
+from functools import lru_cache
 import ecdsa
 from base58 import b58encode_check
-from utils import Utils
+
 
 
 logging.basicConfig(
@@ -28,13 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 class Wallet(object):
+	"""
+	wallet = Wallet.init_wallet('wallet.dat')  # return an object using the path
+	wallet2 = Wallet(wallet())   #wallet() returns three parameters of a wallet
+	"""
 
 	def __init__(self, signing_key, verifying_key, my_address):
 
 		self.signing_key = signing_key
 		self.verifying_key  = verifying_key
 		self.my_address = my_address
-	def get(self):
+
+	def __call__(self):
 		return self.signing_key, self.verifying_key, self.my_address
 
 	@classmethod
@@ -51,8 +43,6 @@ class Wallet(object):
 	@classmethod
 	@lru_cache()
 	def init_wallet(cls, path='wallet.dat'):
-		cls.path = path
-
 		if os.path.exists(path):
 			with open(path, 'rb') as f:
 				signing_key = ecdsa.SigningKey.from_string(

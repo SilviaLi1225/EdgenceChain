@@ -29,7 +29,6 @@ class MerkleNode(NamedTuple):
     @classmethod
     def get_merkle_root_of_txns(cls, txns):
 
-
         @lru_cache(maxsize=1024)
         def get_merkle_root(*leaves: Tuple[str]) -> MerkleNode:
             """Builds a Merkle tree and returns the root given some leaf values."""

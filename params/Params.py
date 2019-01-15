@@ -2,8 +2,13 @@
 from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
-from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                       Block)
+from ds.OutPoint import OutPoint
+from ds.TxIn import TxIn
+from ds.TxOut import TxOut
+from ds.UnspentTxOut import UnspentTxOut
+from ds.Transaction import Transaction
+from ds.Block import Block
+
 from p2p.Peer import Peer
 
 class Params:
@@ -55,7 +60,7 @@ class Params:
     #
     # #realname SubsidyHalvingInterval
     HALVE_SUBSIDY_AFTER_BLOCKS_NUM = 210_000
-
+    ACTIVE_CHAIN_IDX = 0
 
     genesis_block = Block(
         version=0,

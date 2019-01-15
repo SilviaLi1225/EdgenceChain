@@ -7,12 +7,13 @@ from typing import (
 
 from ds.Block  import Block
 from ds.UnspentTxOut import UnspentTxOut
-from ds.Transaction import (OutPoint, TxIn, TxOut, Transaction)
+from ds.Transaction import Transaction
+from ds.TxIn import TxIn
 from ds.UTXO_Set import UTXO_Set
 from params.Params import Params
 from utils.Utils import Utils
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
-
+from p2p.Peer import Peer
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -23,15 +24,14 @@ logger = logging.getLogger(__name__)
 class MemPool(object):
     def __init__(self):
         self.mempool: Dict[str, Transaction] = {}
-
         # Set of orphaned (i.e. has inputs referencing yet non-existent UTXOs)
         # transactions.
         self.orphan_txns: Iterable[Transaction] = []
+
     def get(self):
         return self.mempool
 
-
-    def find_utxo_in_mempool(self,txin) -> UnspentTxOut:
+    def find_utxo_in_mempool(self, txin: TxIn) -> UnspentTxOut:
         txid, idx = txin.to_spend
 
         try:
@@ -44,7 +44,7 @@ class MemPool(object):
             *txout, txid=txid, is_coinbase=False, height=-1, txout_idx=idx)
 
 
-    def select_from_mempool(self, block: Block, utxo_set:UTXO_Set) -> Block:
+    def select_from_mempool(self, block: Block, utxo_set: UTXO_Set) -> Block:
         """Fill a Block with transactions from the mempool."""
         added_to_block = set()
 
@@ -95,13 +95,13 @@ class MemPool(object):
         return block
 
 
-    def add_txn_to_mempool(self, txn: Transaction, peers):
+    def add_txn_to_mempool(self, txn: Transaction, utxo_set: UTXO_Set, peers: Iterable[Peer]):
         if txn.id in self.mempool:
             logger.info(f'txn {txn.id} already seen')
             return
 
         try:
-            txn.validate_txn()
+            txn.validate_txn(utxo_set, self.mempool)
         except TxnValidationError as e:
             if e.to_orphan:
                 logger.info(f'txn {e.to_orphan.id} submitted as orphan')

@@ -46,13 +46,21 @@ def with_lock(lock):
         return wrapper
     return dec
 
-from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                       Block)
+
+from ds.Block import Block
+from ds.OutPoint import OutPoint
+from ds.TxIn import TxIn
+from ds.TxOut import TxOut
+from ds.UnspentTxOut import UnspentTxOut
+from ds.Transaction import Transaction
+
+
 from ds.MerkleNode import MerkleNode
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from params.Params import Params
 
 
+from _thread import RLock
 
 # Chain
 # ----------------------------------------------------------------------------
@@ -249,14 +257,7 @@ def try_reorg(branch, branch_idx, fork_idx) -> bool:
     return True
 
 
-def get_median_time_past(num_last_blocks: int) -> int:
-    """Grep for: GetMedianTimePast."""
-    last_n_blocks = active_chain[::-1][:num_last_blocks]
 
-    if not last_n_blocks:
-        return 0
-
-    return last_n_blocks[len(last_n_blocks) // 2].timestamp
 
 
 # Chain Persistance
@@ -394,67 +395,6 @@ def mine_forever():
 # Validation
 # ----------------------------------------------------------------------------
 
-
-@with_lock(chain_lock)
-def validate_block(block: Block) -> Block:
-    if not block.txns:
-        raise BlockValidationError('txns empty')
-
-    if block.timestamp - time.time() > Params.MAX_FUTURE_BLOCK_TIME:
-        raise BlockValidationError('Block timestamp too far in future')
-
-    if int(block.id, 16) > (1 << (256 - block.bits)):
-        raise BlockValidationError("Block header doesn't satisfy bits")
-
-    if [i for (i, tx) in enumerate(block.txns) if tx.is_coinbase] != [0]:
-        raise BlockValidationError('First txn must be coinbase and no more')
-
-    try:
-        for i, txn in enumerate(block.txns):
-            txn.validate_basics(as_coinbase=(i == 0))
-    except TxnValidationError:
-        logger.exception(f"Transaction {txn} in {block} failed to validate")
-        raise BlockValidationError('Invalid txn {txn.id}')
-
-    if MerkleNode.get_merkle_root_of_txns(block.txns).val != block.merkle_hash:
-        raise BlockValidationError('Merkle hash invalid')
-
-    if block.timestamp <= get_median_time_past(11):
-        raise BlockValidationError('timestamp too old')
-
-    if not block.prev_block_hash and not active_chain:
-        # This is the genesis block.
-        prev_block_chain_idx = ACTIVE_CHAIN_IDX
-    else:
-        prev_block, prev_block_height, prev_block_chain_idx = locate_block(
-            block.prev_block_hash)
-
-        if not prev_block:
-            raise BlockValidationError(
-                f'prev block {block.prev_block_hash} not found in any chain',
-                to_orphan=block)
-
-        # No more validation for a block getting attached to a branch.
-        if prev_block_chain_idx != ACTIVE_CHAIN_IDX:
-            return block, prev_block_chain_idx
-
-        # Prev. block found in active chain, but isn't tip => new fork.
-        elif prev_block != active_chain[-1]:
-            return block, prev_block_chain_idx + 1  # Non-existent
-
-    if get_next_work_required(block.prev_block_hash) != block.bits:
-        raise BlockValidationError('bits is incorrect')
-
-    for txn in block.txns[1:]:
-        try:
-            txn.validate_txn(siblings_in_block=block.txns[1:],
-                         allow_utxo_from_mempool=False)
-        except TxnValidationError:
-            msg = f"{txn} failed to validate"
-            logger.exception(msg)
-            raise BlockValidationError(msg)
-
-    return block, prev_block_chain_idx
 
 
 

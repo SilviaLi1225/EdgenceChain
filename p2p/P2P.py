@@ -12,9 +12,12 @@ from functools import lru_cache, wraps
 from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
-
-from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                                  Block)
+from ds.OutPoint import OutPoint
+from ds.TxIn import TxIn
+from ds.TxOut import TxOut
+from ds.UnspentTxOut import UnspentTxOut
+from ds.Transaction import Transaction
+from ds.Block  import Block
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from utils import Utils
 from params.Params import Params

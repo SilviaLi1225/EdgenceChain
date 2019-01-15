@@ -4,12 +4,9 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from ds.Block  import Block
 from ds.UnspentTxOut import UnspentTxOut
-from ds.Transaction import (OutPoint, TxIn, TxOut, Transaction)
-from params.Params import Params
-from utils.Utils import Utils
-from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
+from ds.OutPoint import OutPoint
+
 
 
 logging.basicConfig(
@@ -20,8 +17,7 @@ logger = logging.getLogger(__name__)
 
 
   # UTXO set
-# ----------------------------------------------------------------------------
-#utxo_set = UTXO_Set() #然后对utxo_set的操作就转化为对utxo_set对象及其utxoSet成员的操作
+
 
 class UTXO_Set(object):
 

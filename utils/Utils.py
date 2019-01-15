@@ -12,14 +12,7 @@ from functools import lru_cache, wraps
 from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
-import ecdsa
-from base58 import b58encode_check
 
-
-from ds.Block  import (OutPoint, TxIn, TxOut, UnspentTxOut, Transaction,
-                       Block)
-from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
-from params.Params import Params
 from p2p.Peer import Peer
 
 
@@ -89,8 +82,10 @@ class Utils(object):
     @classmethod
     def encode_socket_data(cls, data: object) -> bytes:
 		"""Our protocol is: first 4 bytes signify msg length."""
+		def int_to_8bytes(a: int) -> bytes:
+			return binascii.unhexlify(f"{a:0{8}x}")
 		to_send = cls.serialize(data).encode()
-		return cls.int_to_8bytes(len(to_send)) + to_send
+		return int_to_8bytes(len(to_send)) + to_send
 	
     @classmethod
     def read_all_from_socket(cls, req) -> object:
@@ -107,18 +102,15 @@ class Utils(object):
 
     @classmethod
     def send_to_peer(cls, data, peer)->bool:
-		"""Send a message to a (by default) random peer."""
-
 		#peer = peer or random.choice(list(peers))
-		if not isinstance(peer, Peer):
-			logger.error(f"{peer} is not instance of Peer class" )
-			return False
+		#if not isinstance(peer, Peer):
+		#	logger.error(f"{peer} is not instance of Peer class" )
+		#	return False
 		tries_left = 3
 	
 		while tries_left > 0:
 			try:
-				ip, port = peer[0], peer[1]
-				with socket.create_connection((ip,port), timeout=1) as s:
+				with socket.create_connection(*peer(), timeout=1) as s:
 					s.sendall(cls.encode_socket_data(data))
 				return True
 			except Exception:
@@ -127,11 +119,6 @@ class Utils(object):
 				time.sleep(2)
 			else:
 				return False
-	
-		#logger.info(f"[p2p] removing dead peer {peer}")
-		#peers = {x for x in peers if x != peer} #its the responsiblity of the sender to delete the dead peer
 
-    @classmethod
-    def int_to_8bytes(cls, a: int) -> bytes: 
-		return binascii.unhexlify(f"{a:0{8}x}")
+
 
