@@ -265,8 +265,8 @@ class Block(NamedTuple):
 genesis_block = Block(
     version=0, prev_block_hash=None,
     merkle_hash=(
-        '7118894203235a955a908c0abfc6d8fe6edec47b0a04ce1bf7263da3b4366d22'),
-    timestamp=1501821412, bits=24, nonce=10126761,
+        '561878ea68f85289f997c4ce2d7902205f6ff41b1cbf6626e0e1ad8a14fd71c5'),
+    timestamp=1501821412, bits=24, nonce=7624554,
     txns=[Transaction(
         txins=[TxIn(
             to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
