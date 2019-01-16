@@ -30,6 +30,10 @@ class Peer(NamedTuple):
     def __call__(self):
         return str(self.ip), int(self.port)
 
+    @property
+    def id(self):
+        return Utils.sha256d(Utils.serialize(self))
+
     @classmethod
     def init_peers(cls, peerfile = Params.Params.PEERS_FILE)->Iterable[NamedTuple]:
         if not os.path.exists(peerfile):

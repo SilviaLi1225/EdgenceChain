@@ -26,6 +26,8 @@ from p2p.Peer import Peer
 from ds.UTXO_Set import UTXO_Set
 from ds.MemPool import MemPool
 from ds.MerkleNode import MerkleNode
+from ds.BlockChain import BlockChain
+
 import ecdsa
 from base58 import b58encode_check
 from utils import Utils
@@ -38,14 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def with_lock(lock):
-    def dec(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            with lock:
-                return func(*args, **kwargs)
-        return wrapper
-    return dec
+
 
 
 from ds.Block import Block
@@ -61,7 +56,7 @@ from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, Bloc
 from params.Params import Params
 
 
-from _thread import RLock
+from utils.Utils import Utils
 
 # Chain
 
@@ -81,22 +76,9 @@ chain_lock = threading.RLock()
 
 orphan_blocks: Iterable[Block] = []
 
-# Used to signify the active chain in `locate_block`.
-ACTIVE_CHAIN_IDX = 0
 
 
-@with_lock(chain_lock)
-def get_current_height(): return len(active_chain)
-
-
-@with_lock(chain_lock)
-def txn_iterator(chain):
-    return (
-        (txn, block, height)
-        for height, block in enumerate(chain) for txn in block.txns)
-
-
-@with_lock(chain_lock)
+@Utils.with_lock(chain_lock)
 def locate_block(block_hash: str, chain=None) -> (Block, int, int):
     chains = [chain] if chain else [active_chain, *side_branches]
 
@@ -107,7 +89,7 @@ def locate_block(block_hash: str, chain=None) -> (Block, int, int):
     return (None, None, None)
 
 
-@with_lock(chain_lock)
+@Utils.with_lock(chain_lock)
 def connect_block(block: Union[str, Block], peers: Iterable[Peer], mempool: MemPool, utxo_set:UTXO_Set,
                   doing_reorg=False,
                   ) -> Union[None, Block]:
@@ -165,8 +147,8 @@ def connect_block(block: Union[str, Block], peers: Iterable[Peer], mempool: MemP
     return chain_idx
 
 
-@with_lock(chain_lock)
-def disconnect_block(block, mempool:MemPool, utxo_set: UTXO_Set, chain=None):
+@Utils.with_lock(chain_lock)
+def disconnect_block(block, mempool:MemPool, utxo_set: UTXO_Set, chain: BlockChain=None):
     chain = chain or active_chain
     assert block == chain[-1], "Block being disconnected must be tip."
 
@@ -176,7 +158,7 @@ def disconnect_block(block, mempool:MemPool, utxo_set: UTXO_Set, chain=None):
         # Restore UTXO set to what it was before this block.
         for txin in tx.txins:
             if txin.to_spend:  # Account for degenerate coinbase txins.
-                utxo_set.add_to_utxo(*find_txout_for_txin(txin, chain))
+                utxo_set.add_to_utxo(*chain.find_txout_for_txin(txin))
         for i in range(len(tx.txouts)):
             utxo_set.rm_from_utxo(tx.id, i)
 
@@ -184,16 +166,7 @@ def disconnect_block(block, mempool:MemPool, utxo_set: UTXO_Set, chain=None):
     return chain.pop()
 
 
-def find_txout_for_txin(txin, chain):
-    txid, txout_idx = txin.to_spend
-
-    for tx, block, height in txn_iterator(chain):
-        if tx.id == txid:
-            txout = tx.txouts[txout_idx]
-            return (txout, tx, txout_idx, tx.is_coinbase, height)
-
-
-@with_lock(chain_lock)
+@Utils.with_lock(chain_lock)
 def reorg_if_necessary() -> bool:
     reorged = False
     frozen_side_branches = list(side_branches)  # May change during this call.
@@ -215,7 +188,7 @@ def reorg_if_necessary() -> bool:
     return reorged
 
 
-@with_lock(chain_lock)
+@Utils.with_lock(chain_lock)
 def try_reorg(branch, branch_idx, fork_idx) -> bool:
     # Use the global keyword so that we can actually swap out the reference
     # in case of a reorg.
@@ -256,39 +229,7 @@ def try_reorg(branch, branch_idx, fork_idx) -> bool:
     return True
 
 
-
-
-
-# Chain Persistance
-# ----------------------------------------------------------------------------
-
-CHAIN_PATH = os.environ.get('TC_CHAIN_PATH', 'chain.dat')
-
-@with_lock(chain_lock)
-def save_to_disk():
-    with open(CHAIN_PATH, "wb") as f:
-        logger.info(f"saving chain with {len(active_chain)} blocks")
-        f.write(Utils.encode_socket_data(list(active_chain)))
-
-@with_lock(chain_lock)
-def load_from_disk():
-    if not os.path.isfile(CHAIN_PATH):
-        return
-    try:
-        with open(CHAIN_PATH, "rb") as f:
-            msg_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
-            new_blocks = Utils.deserialize(f.read(msg_len))
-            logger.info(f"loading chain from disk with {len(new_blocks)} blocks")
-            for block in new_blocks:
-                connect_block(block)
-    except Exception:
-        logger.exception('load chain failed, starting from genesis')
-
-
-
 # Proof of work
-# ----------------------------------------------------------------------------
-
 def get_next_work_required(prev_block_hash: str) -> int:
     """
     Based on the chain, return the number of difficulty bits the next block
@@ -342,7 +283,7 @@ def assemble_and_solve_block(pay_coinbase_to_addr, mempool:MemPool, wallet, utxo
     fees = block.calculate_fees(utxo_set.get())
     my_address = wallet.get()[2]
     coinbase_txn = Transaction.create_coinbase(
-        my_address, (Block.get_block_subsidy(active_chain) + fees), len(active_chain))
+        my_address, (Block.get_block_subsidy(len(active_chain)) + fees), len(active_chain))
     block = block._replace(txns=[coinbase_txn, *block.txns])
     block = block._replace(merkle_hash=MerkleNode.get_merkle_root_of_txns(block.txns).val)
 
@@ -389,15 +330,6 @@ def mine_forever():
         if block:
             connect_block(block)
             save_to_disk()
-
-
-# Validation
-# ----------------------------------------------------------------------------
-
-
-
-
-
 
 
 # Signal when the initial block download has completed.

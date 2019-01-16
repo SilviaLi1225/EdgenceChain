@@ -8,6 +8,9 @@ class BaseException(Exception):
 class TxUnlockError(BaseException):
     pass
 
+class ChainFileLostError(BaseException):
+    pass
+
 class TxnValidationError(BaseException):
     def __init__(self, *args, to_orphan: Transaction = None, **kwargs):
         super().__init__(*args, **kwargs)

@@ -80,6 +80,8 @@ class Params:
         )
     # list of peers
     PEERS_FILE =  'peers.conf'
+    CHAIN_FILE = 'chain.dat'
+    WALLET_FILE = 'wallet.dat'
     PEERS: Iterable[Peer] = list([Peer('127.0.0.1', 9999),
                       Peer('127.0.0.1', 9998),
                       Peer('localhost', 9999)])

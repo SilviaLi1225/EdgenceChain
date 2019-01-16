@@ -12,8 +12,10 @@ from functools import lru_cache, wraps
 from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
+from _thread import RLock
 
 from p2p.Peer import Peer
+from ds.Block import Block
 
 
 logging.basicConfig(
@@ -80,25 +82,18 @@ class Utils(object):
 		return hashlib.sha256(hashlib.sha256(s).digest()).hexdigest()
 
     @classmethod
-    def encode_socket_data(cls, data: object) -> bytes:
+    def encode_chain_data(cls, chain: Iterable[Block]) -> bytes:
 		"""Our protocol is: first 4 bytes signify msg length."""
 		def int_to_8bytes(a: int) -> bytes:
 			return binascii.unhexlify(f"{a:0{8}x}")
-		to_send = cls.serialize(data).encode()
-		return int_to_8bytes(len(to_send)) + to_send
+		block_len = len(chain)
+		to_send = cls.serialize(chain).encode()
+		msg_len = len(to_send)
+		return int_to_8bytes(block_len) + int_to_8bytes(msg_len) + to_send
 	
-    @classmethod
-    def read_all_from_socket(cls, req) -> object:
-		data = b''
-		# Our protocol is: first 4 bytes signify msg length.
-		msg_len = int(binascii.hexlify(req.recv(4) or b'\x00'), 16)
 
-		while msg_len > 0:
-			tdat = req.recv(1024)
-			data += tdat
-			msg_len -= len(tdat)
 
-		return cls.deserialize(data.decode()) if data else None
+
 
     @classmethod
     def send_to_peer(cls, data, peer)->bool:
@@ -120,5 +115,12 @@ class Utils(object):
 			else:
 				return False
 
-
-
+    @classmethod
+    def with_lock(cls, lock: RLock):
+		def dec(func):
+			@wraps(func)
+			def wrapper(*args, **kwargs):
+				with lock:
+					return func(*args, **kwargs)
+			return wrapper
+		return dec

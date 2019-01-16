@@ -1,7 +1,7 @@
 from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
-from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
+from utils.Errors import (BaseException, ChainFileLostError, TxUnlockError, TxnValidationError, BlockValidationError)
 
 from utils.Utils import Utils
 from params.Params import Params
@@ -11,6 +11,8 @@ from ds.UTXO_Set import UTXO_Set
 from ds.MemPool import MemPool
 from ds.TxIn import TxIn
 from ds.TxOut import TxOut
+from ds.BlockChain import BlockChain
+
 
 
 import binascii,ecdsa,logging,os
@@ -27,6 +29,7 @@ logger = logging.getLogger(__name__)
 class Transaction(NamedTuple):
     txins: Iterable[TxIn]
     txouts: Iterable[TxOut]
+
 
     # The block number or timestamp at which this transaction is unlocked.
     # < 500000000: Block number at which this transaction is unlocked.
@@ -71,7 +74,7 @@ class Transaction(NamedTuple):
                      utxo_set: UTXO_Set,
                      mempool: MemPool,
                      as_coinbase: bool = False,
-                     siblings_in_block: Iterable[object] = None,  #object
+                     siblings_in_block: Iterable[NamedTuple] = None,  #object
                      allow_utxo_from_mempool: bool = True,
                      ) -> bool:
         """
@@ -101,6 +104,16 @@ class Transaction(NamedTuple):
                 raise TxUnlockError("Signature doesn't match")
             return True        
 
+        def get_current_height(chainfile=Params.CHAIN_FILE):
+            if not os.path.isfile(chainfile):
+                raise ChainFileLostError('chain file not found')
+            try:
+                with open(chainfile, "rb") as f:
+                    height = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
+            except Exception:
+                logger.exception('read block height failed')
+                return 0
+            return height
 
         self.validate_basics(as_coinbase=as_coinbase)
 

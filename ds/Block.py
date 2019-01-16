@@ -28,17 +28,9 @@ from ds.BlockChain import BlockChain
 import ecdsa
 from base58 import b58encode_check
 
-
 from _thread import RLock
 
-def with_lock(lock):
-    def dec(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            with lock:
-                return func(*args, **kwargs)
-        return wrapper
-    return dec
+
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -79,7 +71,20 @@ class Block(NamedTuple):
         return Utils.sha256d(self.header())
 
 
-    def calculate_fees(self, utxo_set:UTXO_Set) -> int:
+
+
+
+    @classmethod
+    def get_block_subsidy(active_chain: BlockChain) -> int:
+        halvings = active_chain.height// Params.HALVE_SUBSIDY_AFTER_BLOCKS_NUM
+
+        if halvings >= 64:
+            return 0
+
+        return 50 * Params.LET_PER_COIN // (2 ** halvings)
+
+
+    def calculate_fees(self, utxo_set: UTXO_Set) -> int:
 
         fee = 0
 
@@ -98,10 +103,49 @@ class Block(NamedTuple):
         return fee
 
 
-    def validate_block(self, active_chain: BlockChain, chain_lock:RLock) -> int:
 
-        @with_lock(chain_lock)
-        def get_median_time_past(num_last_blocks: int) -> int:
+    def validate_block(self, active_chain: BlockChain, side_branches: Iterable[BlockChain], chain_lock: RLock) -> int:
+
+        def _locate_block(block_hash: str) -> (Block, int, int):
+            blockchains = [active_chain, *side_branches]
+
+            for blockchain in enumerate(blockchains):
+                chain_idx = blockchain.idx
+                for height, block in enumerate(blockchain.chain):
+                    if block.id == block_hash:
+                        return (block, height, chain_idx)
+            return (None, None, None)
+
+        def _get_next_work_required(prev_block_hash: str) -> int:
+            """
+            Based on the chain, return the number of difficulty bits the next block
+            must solve.
+            """
+            if not prev_block_hash:
+                return Params.INITIAL_DIFFICULTY_BITS
+
+            (prev_block, prev_height, _) = _locate_block(self.prev_block_hash)
+
+            if (prev_height + 1) % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
+                return prev_block.bits
+
+            with chain_lock:
+                period_start_block = active_chain[max(
+                    prev_height - (Params.DIFFICULTY_PERIOD_IN_BLOCKS - 1), 0)]
+
+            actual_time_taken = prev_block.timestamp - period_start_block.timestamp
+
+            if actual_time_taken < Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
+                # Increase the difficulty
+                return prev_block.bits + 1
+            elif actual_time_taken > Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
+                return prev_block.bits - 1
+            else:
+                # Wow, that's unlikely.
+                return prev_block.bits
+
+        @Utils.with_lock(chain_lock)
+        def _get_median_time_past(num_last_blocks: int) -> int:
             """Grep for: GetMedianTimePast."""
             last_n_blocks = active_chain.chain[::-1][:num_last_blocks]
 
@@ -132,14 +176,14 @@ class Block(NamedTuple):
         if MerkleNode.get_merkle_root_of_txns(self.txns).val != self.merkle_hash:
             raise BlockValidationError('Merkle hash invalid')
 
-        if self.timestamp <= get_median_time_past(11):
+        if self.timestamp <= _get_median_time_past(11):
             raise BlockValidationError('timestamp too old')
 
         if not self.prev_block_hash and not active_chain:
             # This is the genesis block.
             prev_block_chain_idx = Params.ACTIVE_CHAIN_IDX
         else:
-            prev_block, prev_block_height, prev_block_chain_idx = locate_block(
+            prev_block, prev_block_height, prev_block_chain_idx = _locate_block(
                 self.prev_block_hash)
 
             if not prev_block:
@@ -155,7 +199,7 @@ class Block(NamedTuple):
             elif prev_block != active_chain[-1]:
                 return prev_block_chain_idx + 1  # Non-existent
 
-        if get_next_work_required(block.prev_block_hash) != self.bits:
+        if _get_next_work_required(self.prev_block_hash) != self.bits:
             raise BlockValidationError('bits is incorrect')
 
         for txn in self.txns[1:]:
@@ -171,14 +215,7 @@ class Block(NamedTuple):
 
 
 
-    @classmethod
-    def get_block_subsidy(height) -> int:
-        halvings = height // Params.HALVE_SUBSIDY_AFTER_BLOCKS_NUM
 
-        if halvings >= 64:
-            return 0
-
-        return 50 * Params.LET_PER_COIN // (2 ** halvings)
 
 
 
