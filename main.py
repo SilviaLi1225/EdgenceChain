@@ -58,7 +58,6 @@ from params.Params import Params
 
 from utils.Utils import Utils
 
-# Chain
 
 #
 # #realname chainActive
@@ -76,6 +75,11 @@ chain_lock = threading.RLock()
 
 orphan_blocks: Iterable[Block] = []
 
+# Signal to communicate to the mining thread that it should stop mining because
+# we've updated the chain with a new block.
+
+# Signal when the initial block download has completed.
+ibd_done = threading.Event()
 
 
 @Utils.with_lock(chain_lock)
@@ -87,147 +91,6 @@ def locate_block(block_hash: str, chain=None) -> (Block, int, int):
             if block.id == block_hash:
                 return (block, height, chain_idx)
     return (None, None, None)
-
-
-@Utils.with_lock(chain_lock)
-def connect_block(block: Union[str, Block], peers: Iterable[Peer], mempool: MemPool, utxo_set:UTXO_Set,
-                  doing_reorg=False,
-                  ) -> Union[None, Block]:
-    """Accept a block and return the chain index we append it to."""
-    # Only exit early on already seen in active_chain when reorging.
-    search_chain = active_chain if doing_reorg else None
-
-    if locate_block(block.id, chain=search_chain)[0]:
-        logger.debug(f'ignore block already seen: {block.id}')
-        return None
-
-    try:
-        block, chain_idx = validate_block(block)
-    except BlockValidationError as e:
-        logger.exception('block %s failed validation', block.id)
-        if e.to_orphan:
-            logger.info(f"saw orphan block {block.id}")
-            orphan_blocks.append(e.to_orphan)
-        return None
-
-    # If `validate_block()` returned a non-existent chain index, we're
-    # creating a new side branch.
-    if chain_idx != ACTIVE_CHAIN_IDX and len(side_branches) < chain_idx:
-        logger.info(
-            f'creating a new side branch (idx {chain_idx}) '
-            f'for block {block.id}')
-        side_branches.append([])
-
-    logger.info(f'connecting block {block.id} to chain {chain_idx}')
-    chain = (active_chain if chain_idx == ACTIVE_CHAIN_IDX else
-             side_branches[chain_idx - 1])
-    chain.append(block)
-
-    # If we added to the active chain, perform upkeep on utxo_set and mempool.
-    if chain_idx == ACTIVE_CHAIN_IDX:
-        for tx in block.txns:
-            mempool.mempool.pop(tx.id, None)
-
-            if not tx.is_coinbase:
-                for txin in tx.txins:
-                    utxo_set.rm_from_utxo(*txin.to_spend)
-            for i, txout in enumerate(tx.txouts):
-                utxo_set.add_to_utxo(txout, tx, i, tx.is_coinbase, len(chain))
-
-    if (not doing_reorg and reorg_if_necessary()) or \
-            chain_idx == ACTIVE_CHAIN_IDX:
-        mine_interrupt.set()
-        logger.info(
-            f'block accepted '
-            f'height={len(active_chain) - 1} txns={len(block.txns)}')
-
-    for peer in peers:
-        Utils.send_to_peer(block, peer)
-
-    return chain_idx
-
-
-@Utils.with_lock(chain_lock)
-def disconnect_block(block, mempool:MemPool, utxo_set: UTXO_Set, chain: BlockChain=None):
-    chain = chain or active_chain
-    assert block == chain[-1], "Block being disconnected must be tip."
-
-    for tx in block.txns:
-        mempool.mempool[tx.id] = tx
-
-        # Restore UTXO set to what it was before this block.
-        for txin in tx.txins:
-            if txin.to_spend:  # Account for degenerate coinbase txins.
-                utxo_set.add_to_utxo(*chain.find_txout_for_txin(txin))
-        for i in range(len(tx.txouts)):
-            utxo_set.rm_from_utxo(tx.id, i)
-
-    logger.info(f'block {block.id} disconnected')
-    return chain.pop()
-
-
-@Utils.with_lock(chain_lock)
-def reorg_if_necessary() -> bool:
-    reorged = False
-    frozen_side_branches = list(side_branches)  # May change during this call.
-
-    # TODO should probably be using `chainwork` for the basis of
-    # comparison here.
-    for branch_idx, chain in enumerate(frozen_side_branches, 1):
-        fork_block, fork_idx, _ = locate_block(
-            chain[0].prev_block_hash, active_chain)
-        active_height = len(active_chain)
-        branch_height = len(chain) + fork_idx
-
-        if branch_height > active_height:
-            logger.info(
-                f'attempting reorg of idx {branch_idx} to active_chain: '
-                f'new height of {branch_height} (vs. {active_height})')
-            reorged |= try_reorg(chain, branch_idx, fork_idx)
-
-    return reorged
-
-
-@Utils.with_lock(chain_lock)
-def try_reorg(branch, branch_idx, fork_idx) -> bool:
-    # Use the global keyword so that we can actually swap out the reference
-    # in case of a reorg.
-    global active_chain
-    global side_branches
-
-    fork_block = active_chain[fork_idx]
-
-    def disconnect_to_fork():
-        while active_chain[-1].id != fork_block.id:
-            yield disconnect_block(active_chain[-1])
-
-    old_active = list(disconnect_to_fork())[::-1]
-
-    assert branch[0].prev_block_hash == active_chain[-1].id
-
-    def rollback_reorg():
-        logger.info(f'reorg of idx {branch_idx} to active_chain failed')
-        list(disconnect_to_fork())  # Force the gneerator to eval.
-
-        for block in old_active:
-            assert connect_block(block, doing_reorg=True) == ACTIVE_CHAIN_IDX
-
-    for block in branch:
-        connected_idx = connect_block(block, doing_reorg=True)
-        if connected_idx != ACTIVE_CHAIN_IDX:
-            rollback_reorg()
-            return False
-
-    # Fix up side branches: remove new active, add old active.
-    side_branches.pop(branch_idx - 1)
-    side_branches.append(old_active)
-
-    logger.info(
-        'chain reorg! New height: %s, tip: %s',
-        len(active_chain), active_chain[-1].id)
-
-    return True
-
 
 # Proof of work
 def get_next_work_required(prev_block_hash: str) -> int:
@@ -259,8 +122,7 @@ def get_next_work_required(prev_block_hash: str) -> int:
         # Wow, that's unlikely.
         return prev_block.bits
 
-
-def assemble_and_solve_block(pay_coinbase_to_addr, mempool:MemPool, wallet, utxo_set:UTXO_Set, txns=None):
+def assemble_and_solve_block(mempool: MemPool, active_chain: BlockChain, wallet: Wallet, utxo_set:UTXO_Set, txns=None):
     """
     Construct a Block by pulling transactions from the mempool, then mine it.
     """
@@ -278,12 +140,12 @@ def assemble_and_solve_block(pay_coinbase_to_addr, mempool:MemPool, wallet, utxo
     )
 
     if not block.txns:
-        block = mempool.select_from_mempool(block)
+        block = mempool.select_from_mempool(block, utxo_set)
 
-    fees = block.calculate_fees(utxo_set.get())
+    fees = block.calculate_fees(utxo_set)
     my_address = wallet.get()[2]
     coinbase_txn = Transaction.create_coinbase(
-        my_address, (Block.get_block_subsidy(len(active_chain)) + fees), len(active_chain))
+        my_address, (Block.get_block_subsidy(active_chain) + fees), active_chain.height)
     block = block._replace(txns=[coinbase_txn, *block.txns])
     block = block._replace(merkle_hash=MerkleNode.get_merkle_root_of_txns(block.txns).val)
 
@@ -292,14 +154,7 @@ def assemble_and_solve_block(pay_coinbase_to_addr, mempool:MemPool, wallet, utxo
 
     return mine(block)
 
-
-
-# Signal to communicate to the mining thread that it should stop mining because
-# we've updated the chain with a new block.
-mine_interrupt = threading.Event()
-
-
-def mine(block):
+def mine(block: Block, mine_interrupt: threading.Event) -> Block:
     start = time.time()
     nonce = 0
     target = (1 << (256 - block.bits))
@@ -321,7 +176,6 @@ def mine(block):
 
     return block
 
-
 def mine_forever():
     while True:
         my_address = Wallet.init_wallet()[2]
@@ -330,15 +184,6 @@ def mine_forever():
         if block:
             connect_block(block)
             save_to_disk()
-
-
-# Signal when the initial block download has completed.
-ibd_done = threading.Event()
-
-
-
-# Main
-# ----------------------------------------------------------------------------
 
 
 def main():

@@ -53,6 +53,7 @@ class EdgenceChain(object):
         self.mempool: MemPool = MemPool()
         self.wallet = Wallet.init_wallet(Params.WALLET_FILE)
         self.peers = Peer.init_peers(Params.PEERS_FILE)
+        self.mine_interrupt = threading.Event()
 
         Persistence.load_from_disk(self.active_chain, self.utxo_set, Params.CHAIN_FILE)
 
