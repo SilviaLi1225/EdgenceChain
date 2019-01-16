@@ -79,6 +79,7 @@ class Params:
                 locktime=None)]
         )
     # list of peers
+    PORT_CURRENT = int(9999)
     PEERS_FILE =  'peers.conf'
     CHAIN_FILE = 'chain.dat'
     WALLET_FILE = 'wallet.dat'

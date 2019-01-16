@@ -18,7 +18,5 @@ class GetMempoolMsg(NamedTuple):  # List the mempool
     def handle(self, sock, mempool:MemPool):
         sock.sendall(Utils.encode_socket_data(list(mempool.get().keys())))
 
-class GetActiveChainMsg(NamedTuple):  # Get the active chain in its entirety.
-    def handle(self, sock, active_chain):
-        sock.sendall(Utils.encode_socket_data(list(active_chain)))
+
 
