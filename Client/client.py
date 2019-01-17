@@ -20,8 +20,6 @@ import socket
 
 from docopt import docopt
 
-import main as t
-
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),

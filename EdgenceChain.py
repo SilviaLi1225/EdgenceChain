@@ -15,36 +15,33 @@ from typing import (
     Callable)
 
 
-from ds.UnspentTxOut import UnspentTxOut
-from ds.OutPoint import OutPoint
+from utils.Errors import BlockValidationError
+from utils import Utils
+
+from params.Params import Params
+
+
 from ds.Transaction import Transaction
+from ds.Block import Block
 from ds.UTXO_Set import UTXO_Set
 from ds.MemPool import MemPool
-from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
-from utils import Utils
-from params.Params import Params
 from ds.MerkleNode import MerkleNode
 from ds.BlockChain import BlockChain
-from ds.Block import Block
 
 from persistence import Persistence
+
 from wallet.Wallet import Wallet
 
 from p2p.Message import Message
 from p2p.Message import Actions
 from p2p.Peer import Peer
-import ecdsa
-from base58 import b58encode_check
 from p2p.TCPserver import (ThreadedTCPServer, TCPHandler)
 
-from _thread import RLock
+
 from consensus.Consensus import PoW
 
-from p2p.Peer import Peer
-from ds.UTXO_Set import UTXO_Set
-from ds.MemPool import MemPool
-from ds.MerkleNode import MerkleNode
-from ds.BlockChain import BlockChain
+
+
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
