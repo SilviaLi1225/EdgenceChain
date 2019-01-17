@@ -1,8 +1,5 @@
 
 
-from ds.Transaction import Transaction
-from ds.Block import Block
-
 class BaseException(Exception):
     def __init__(self, msg):
         self.msg = msg
@@ -10,16 +7,16 @@ class BaseException(Exception):
 class TxUnlockError(BaseException):
     pass
 
-class ChainFileLostError(BaseException):
+class ChainFileLostError (BaseException):
     pass
 
 class TxnValidationError(BaseException):
-    def __init__(self, *args, to_orphan: Transaction = None, **kwargs):
+    def __init__(self, *args, to_orphan, **kwargs):
         super().__init__(*args, **kwargs)
         self.to_orphan = to_orphan
 
 class BlockValidationError(BaseException):
-    def __init__(self, *args, to_orphan: Block = None, **kwargs):
+    def __init__(self, *args, to_orphan, **kwargs):
         super().__init__(*args, **kwargs)
         self.to_orphan = to_orphan
 

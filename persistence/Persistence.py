@@ -8,10 +8,7 @@ import socketserver
 import socket
 import random
 import os
-from functools import lru_cache, wraps
-from typing import (
-    Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
-    Callable)
+
 
 
 from p2p.Peer import Peer
@@ -22,7 +19,7 @@ from ds.BlockChain import BlockChain
 
 import ecdsa
 from base58 import b58encode_check
-from utils import Utils
+from utils.Utils import Utils
 from wallet import Wallet
 
 logging.basicConfig(
@@ -32,13 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 from ds.Block import Block
-from ds.OutPoint import OutPoint
-from ds.TxIn import TxIn
-from ds.TxOut import TxOut
-from ds.UnspentTxOut import UnspentTxOut
-from ds.Transaction import Transaction
-
-
 from ds.MerkleNode import MerkleNode
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from params.Params import Params
@@ -155,7 +145,7 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
 
 
     if not os.path.isfile(CHAIN_PATH):
-        logger.info('chain strage file does not exist')
+        logger.info('chain storage file does not exist')
         return
     else:
         if len(active_chain.chain) > 1:
@@ -168,13 +158,11 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
             msg_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
             new_blocks = Utils.deserialize(f.read(msg_len))
             logger.info(f"loading chain from disk with {len(new_blocks)} blocks")
-            for block in new_blocks:
+            for block in new_blocks[1:]:
                 if not _connect_block(block, active_chain, utxo_set):
                     return
     except Exception:
-        active_chain.chain.clear()
-        active_chain.chain.append(Params.genesis_block)
-        logger.exception('load chain failed, starting from genesis')
+        logger.exception('failded in loading from chain storage file')
         return
 
 

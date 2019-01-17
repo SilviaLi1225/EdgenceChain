@@ -16,7 +16,7 @@ from typing import (
 
 
 from utils.Errors import BlockValidationError
-from utils import Utils
+from utils.Utils import Utils
 
 from params.Params import Params
 
@@ -54,7 +54,7 @@ class EdgenceChain(object):
 
     def __init__(self):
 
-        self.active_chain: BlockChain = BlockChain(idx=Params.ACTIVE_CHAIN_IDX, chain=[Params.genesis_block])
+        self.active_chain: BlockChain = BlockChain(idx=Params.ACTIVE_CHAIN_IDX, chain=[Block.genesis_block()])
         self.side_branches: Iterable[BlockChain] = []
         self.orphan_blocks: Iterable[Block] = []
         self.utxo_set: UTXO_Set = UTXO_Set()
@@ -67,7 +67,7 @@ class EdgenceChain(object):
         self.chain_lock: _thread.RLock = threading.RLock()
 
 
-        Persistence.load_from_disk(self.active_chain, self.utxo_set, Params.CHAIN_FILE)
+
 
 
 
@@ -112,7 +112,7 @@ class EdgenceChain(object):
             # Wow, that's unlikely.
             return prev_block.bits
 
-    def assemble_and_solve_block(self, txns=None):
+    def assemble_and_solve_block(self, txns=None)->Block:
         """
         Construct a Block by pulling transactions from the mempool, then mine it.
         """
@@ -133,7 +133,7 @@ class EdgenceChain(object):
             block = self.mempool.select_from_mempool(block, self.utxo_set)
 
         fees = block.calculate_fees(self.utxo_set)
-        my_address = self.wallet.get()[2]
+        my_address = self.wallet()[2]
         coinbase_txn = Transaction.create_coinbase(
             my_address,
             Block.get_block_subsidy(self.active_chain) + fees,
@@ -174,9 +174,13 @@ class EdgenceChain(object):
         return chain_idx
 
     def initial_block_download(self):
-
-        peer = random.choice(self.peers)
-        Utils.send_to_peer(Message(Actions.BlockSyncReq, self.active_chain.chain[-1].id), peer)
+        peer_sample = random.sample(self.peers, len(self.peers))
+        for peer in peer_sample:
+            if Utils.send_to_peer(Message(Actions.BlocksSyncReq, self.active_chain.chain[-1].id), peer):
+                return True
+            else:
+                self.peers.remove(peer)
+        return False
 
 
 
@@ -188,12 +192,13 @@ class EdgenceChain(object):
 
         def mine_forever():
             while True:
-                block = self.assemble_and_solve_block(self.wallet()[2])
+                block = self.assemble_and_solve_block()
 
                 if block:
                     with self.chain_lock:
                         chain_idx  = self.check_block_place(block)
-                        if chain_idx:
+
+                        if chain_idx is not None:
                             if chain_idx == Params.ACTIVE_CHAIN_IDX:
                                 if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
                                                                 self.mempool, \
@@ -206,12 +211,13 @@ class EdgenceChain(object):
                                 Utils.send_to_peer(Message(Actions.BlockRev, block), _peer)
 
 
+        Persistence.load_from_disk(self.active_chain, self.utxo_set, Params.CHAIN_FILE)
 
         workers = []
-        tcphandler = TCPHandler(self.active_chain, self.side_branches, self.orphan_blocks, \
+        tcpHandler = TCPHandler(self.active_chain, self.side_branches, self.orphan_blocks, \
                  self.utxo_set, self.mempool, self.peers, self.mine_interrupt, \
                  self.ibd_done, self.chain_lock)
-        server = ThreadedTCPServer(('0.0.0.0', Params.PORT_CURRENT), tcphandler)
+        server = ThreadedTCPServer(('0.0.0.0', Params.PORT_CURRENT), tcpHandler)
         logger.info(f'[p2p] listening on {Params.PORT_CURRENT}')
         start_worker(workers, server.serve_forever)
 
@@ -219,9 +225,10 @@ class EdgenceChain(object):
             if self.peers:
                 logger.info(f'start initial block download from {len(self.peers)} peers')
             self.initial_block_download()
+            self.ibd_done.wait(1.0)
 
 
-        start_worker(mine_forever)
+        start_worker(workers, mine_forever)
         
         [w.join() for w in workers]
 

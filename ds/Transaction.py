@@ -1,21 +1,26 @@
 from typing import (
-    Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
+    Iterable, NamedTuple, Dict, Mapping, Union, Tuple,
     Callable)
-from utils.Errors import (BaseException, ChainFileLostError, TxUnlockError, TxnValidationError, BlockValidationError)
+
+from utils.Errors import TxUnlockError
+from utils.Errors import TxnValidationError
+from utils.Errors import ChainFileLostError
 
 from utils.Utils import Utils
 from params.Params import Params
 from wallet.Wallet import Wallet
 from ds.UnspentTxOut import UnspentTxOut
 from ds.UTXO_Set import UTXO_Set
-from ds.MemPool import MemPool
 from ds.TxIn import TxIn
 from ds.TxOut import TxOut
-from ds.BlockChain import BlockChain
 
 
 
-import binascii,ecdsa,logging,os
+
+import binascii
+import ecdsa
+import logging
+import os
 
 
 
@@ -72,7 +77,7 @@ class Transaction(NamedTuple):
 
     def validate_txn(self,
                      utxo_set: UTXO_Set,
-                     mempool: MemPool,
+                     mempool: object,
                      as_coinbase: bool = False,
                      siblings_in_block: Iterable[NamedTuple] = None,  #object
                      allow_utxo_from_mempool: bool = True,

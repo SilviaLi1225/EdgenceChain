@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 class BlockChain(object):
 
     def __init__(self, idx: int=0, chain: Iterable[Block]=[]):
-        self.idx = idx
+        self.index = idx
         self.chain = chain
+
 
     @property
     def height(self):
@@ -31,7 +32,7 @@ class BlockChain(object):
 
     @property
     def idx(self):
-        return self.idx
+        return self.index
 
     def find_txout_for_txin(self, txin: TxIn):
 

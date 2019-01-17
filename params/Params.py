@@ -2,14 +2,7 @@
 from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
-from ds.OutPoint import OutPoint
-from ds.TxIn import TxIn
-from ds.TxOut import TxOut
-from ds.UnspentTxOut import UnspentTxOut
-from ds.Transaction import Transaction
-from ds.Block import Block
 
-from p2p.Peer import Peer
 
 class Params:
     # The infamous max block size.
@@ -54,7 +47,7 @@ class Params:
 
     # The number of right-shifts applied to 2 ** 256 in order to create the
     # initial difficulty target necessary for mining a block.
-    INITIAL_DIFFICULTY_BITS = int(24)
+    INITIAL_DIFFICULTY_BITS = int(22)
 
     # The number of blocks after which the mining subsidy will halve.
     #
@@ -62,29 +55,13 @@ class Params:
     HALVE_SUBSIDY_AFTER_BLOCKS_NUM = int(210_000)
     ACTIVE_CHAIN_IDX = int(0)
 
-    genesis_block = Block(
-        version=0,
-        prev_block_hash=None,
-        merkle_hash=(
-            '7118894203235a955a908c0abfc6d8fe6edec47b0a04ce1bf7263da3b4366d22'),
-        timestamp=1501821412,
-        bits=24,
-        nonce=10126761,
-        txns=[Transaction(
-                txins=[TxIn(
-                    to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
-                txouts=[TxOut(
-                    value=5000000000,
-                    to_address='143UVyz7ooiAv1pMqbwPPpnH4BV9ifJGFF')],
-                locktime=None)]
-        )
     # list of peers
-    CHUNK_SIZE = 50
+    CHUNK_SIZE = int(50)
     PORT_CURRENT = int(9999)
     PEERS_FILE =  'peers.conf'
     CHAIN_FILE = 'chain.dat'
     WALLET_FILE = 'wallet.dat'
-    PEERS: Iterable[Peer] = list([Peer('127.0.0.1', 9999),
-                      Peer('127.0.0.1', 9998),
-                      Peer('localhost', 9999)])
+    PEERS: Iterable[Tuple] = list([#('127.0.0.1', 2221),
+                      #('127.0.0.1', 99),
+                      ('localhost', 13)])
 

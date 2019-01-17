@@ -19,10 +19,11 @@ from ds.OutPoint import OutPoint
 from ds.Transaction import Transaction
 from ds.UTXO_Set import UTXO_Set
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
-from utils import Utils
+from utils.Utils import Utils
 from params.Params import Params
 from ds.MerkleNode import MerkleNode
-from ds.BlockChain import BlockChain
+from ds.TxIn import TxIn
+from ds.TxOut import TxOut
 
 
 import ecdsa
@@ -70,12 +71,28 @@ class Block(NamedTuple):
     def id(self) -> str: 
         return Utils.sha256d(self.header())
 
-
+    @classmethod
+    def genesis_block(cls):
+        return cls(
+            version='5465616d3a20456467656e63650a4c65616465723a20776f6c6662726f746865720a4d656d626572733a2063626f7a69'
+                    '2c204c6561684c69752c207069616f6c69616e676b622c2053616c7661746f7265303632362c2053696c7669614c69313'
+                    '232352c204a69617169204c69752c2078696179756e696c0a',
+            prev_block_hash=None,
+            merkle_hash='8cfb8d2d2ed9343461b0eefb73c775b9366a32e05e81b0e8946620e2f1935507',
+            timestamp=1547747173,
+            bits=Params.INITIAL_DIFFICULTY_BITS,
+            nonce=9051321,
+            txns=[Transaction(
+                txins=[TxIn(
+                    to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
+                txouts=[TxOut(
+                    value=5000000000, to_address='0000000000000000000000000000000000')], locktime=None)]
+        )
 
 
 
     @classmethod
-    def get_block_subsidy(active_chain: BlockChain) -> int:
+    def get_block_subsidy(cls, active_chain: object) -> int:
         halvings = active_chain.height// Params.HALVE_SUBSIDY_AFTER_BLOCKS_NUM
 
         if halvings >= 64:
@@ -104,12 +121,12 @@ class Block(NamedTuple):
 
 
 
-    def validate_block(self, active_chain: BlockChain, side_branches: Iterable[BlockChain], chain_lock: RLock) -> int:
+    def validate_block(self, active_chain: object, side_branches: Iterable[object], chain_lock: RLock) -> int:
 
         def _locate_block(block_hash: str) -> (Block, int, int):
             blockchains = [active_chain, *side_branches]
 
-            for blockchain in enumerate(blockchains):
+            for _, blockchain in enumerate(blockchains):
                 chain_idx = blockchain.idx
                 for height, block in enumerate(blockchain.chain):
                     if block.id == block_hash:
@@ -196,7 +213,7 @@ class Block(NamedTuple):
                 return prev_block_chain_idx
 
             # Prev. block found in active chain, but isn't tip => new fork.
-            elif prev_block != active_chain[-1]:
+            elif prev_block != active_chain.chain[-1]:
                 return prev_block_chain_idx + 1  # Non-existent
 
         if _get_next_work_required(self.prev_block_hash) != self.bits:

@@ -13,27 +13,18 @@ from functools import lru_cache, wraps
 from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
-from ds.OutPoint import OutPoint
-from ds.TxIn import TxIn
-from ds.TxOut import TxOut
-from ds.UnspentTxOut import UnspentTxOut
 from ds.Transaction import Transaction
 from ds.Block  import Block
-from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
-from utils import Utils
+from utils.Errors import BlockValidationError
+from utils.Utils import Utils
 from params.Params import Params
 
-import ecdsa
-from base58 import b58encode_check
-from p2p.Peer import Peer
 
 
 from p2p.Peer import Peer
 from ds.UTXO_Set import UTXO_Set
 from ds.MemPool import MemPool
-from ds.MerkleNode import MerkleNode
 from ds.BlockChain import BlockChain
-from wallet.Wallet import Wallet
 from p2p.Message import Message
 from p2p.Message import Actions
 from persistence import Persistence

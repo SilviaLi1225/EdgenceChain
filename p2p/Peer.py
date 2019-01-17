@@ -24,8 +24,8 @@ from params import Params
 from utils.Utils import Utils
 
 class Peer(NamedTuple):
-    ip:str = 'localhost'
-    port:int = 9999
+    ip: str = 'localhost'
+    port: int = 9999
 
     def __call__(self):
         return str(self.ip), int(self.port)
@@ -37,7 +37,9 @@ class Peer(NamedTuple):
     @classmethod
     def init_peers(cls, peerfile = Params.Params.PEERS_FILE)->Iterable[NamedTuple]:
         if not os.path.exists(peerfile):
-            peers = Params.Params.PEERS
+            peers: Iterable[Peer] =[]
+            for peer in Params.Params.PEERS:
+                peers.append(Peer(*peer))
             try:
                 with open(peerfile, "wb") as f:
                     logger.info(f"saving {len(peers)} hostnames")
@@ -48,7 +50,9 @@ class Peer(NamedTuple):
             try:
                 with open(peerfile, "rb") as f:
                     msg_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
-                    peers = Utils.deserialize(f.read(msg_len))
+                    gs = dict()
+                    gs['Peer'] = globals()['Peer']
+                    peers = Utils.deserialize(f.read(msg_len), gs)
                     logger.info(f"loading peers with {len(peers)} hostnames")
             except Exception:
                 logger.exception('loading peers exception')
