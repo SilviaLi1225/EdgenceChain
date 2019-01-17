@@ -146,7 +146,7 @@ class BlockChain(object):
 
 
 
-
+        logger.info(f'connecting block {block.id} to chain {self.idx}')
         self.chain.append(block)
         # If we added to the active chain, perform upkeep on utxo_set and mempool.
         if self.idx == Params.ACTIVE_CHAIN_IDX:
@@ -166,9 +166,6 @@ class BlockChain(object):
             logger.info(
                 f'block accepted '
                 f'height={self.height - 1} txns={len(block.txns)}')
-
-        for peer in peers:
-            Utils.send_to_peer(block, peer)
 
         return True
 

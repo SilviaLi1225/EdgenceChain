@@ -95,10 +95,10 @@ class MemPool(object):
         return block
 
 
-    def add_txn_to_mempool(self, txn: Transaction, utxo_set: UTXO_Set, peers: Iterable[Peer]):
+    def add_txn_to_mempool(self, txn: Transaction, utxo_set: UTXO_Set) -> bool:
         if txn.id in self.mempool:
             logger.info(f'txn {txn.id} already seen')
-            return
+            return None
 
         try:
             txn.validate_txn(utxo_set, self.mempool)
@@ -108,9 +108,10 @@ class MemPool(object):
                 self.orphan_txns.append(e.to_orphan)
             else:
                 logger.exception(f'txn rejected')
+            return None
         else:
             logger.info(f'txn {txn.id} added to mempool')
             self.mempool[txn.id] = txn
 
-            for peer in peers:
-                Utils.send_to_peer(txn, peer)
+            return True
+

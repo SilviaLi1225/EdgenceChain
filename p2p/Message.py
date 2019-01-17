@@ -7,18 +7,29 @@ from ds.UnspentTxOut import UnspentTxOut
 
 from enum import Enum, unique
 
-@unique
-class Action(Enum):
-    BlockSyncReq = 0
-    BlockSyncGet = 1
+
+
+class Actions:
+    BlocksSyncReq = 0
+    BlocksSyncGet = 1
     TxStatusReq  = 2
     UTXO4Addr    = 3
     Balance4Addr = 4
     TxRev        = 5
     BlockRev     = 6
+    TxStatusRev = 7
+    UTXO4AddrRev = 8
+    Balance4AddrRev = 9
+
 
 class Message(NamedTuple):
     action: int
     data: Union[str, Iterable[Block], str, Iterable[UnspentTxOut], int, Transaction, Block]
+
+if __name__ == "__main__":
+
+    message = Message(0, 'avcdsd')
+    print(message)
+
 
 

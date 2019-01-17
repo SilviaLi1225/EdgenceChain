@@ -79,6 +79,7 @@ class Params:
                 locktime=None)]
         )
     # list of peers
+    CHUNK_SIZE = 50
     PORT_CURRENT = int(9999)
     PEERS_FILE =  'peers.conf'
     CHAIN_FILE = 'chain.dat'

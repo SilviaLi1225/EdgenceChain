@@ -13,7 +13,7 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from p2p.P2P import (GetBlocksMsg, InvMsg, ThreadedTCPServer, TCPHandler)
+
 from p2p.Peer import Peer
 from ds.UTXO_Set import UTXO_Set
 from ds.MemPool import MemPool
