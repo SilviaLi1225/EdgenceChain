@@ -285,6 +285,12 @@ side_branches: Iterable[Iterable[Block]] = []
 # Synchronize access to the active chain and side branches.
 chain_lock = threading.RLock()
 
+def init_genesis_block():
+    global genesis_block, active_chain
+    genesis_block = genesis_block._replace(timestamp=int(time.time()))
+    genesis_block = genesis_block._replace(merkle_hash=get_merkle_root_of_txns(genesis_block.txns).val)
+    genesis_block = mine(genesis_block)
+    active_chain = [genesis_block]
 
 def with_lock(lock):
     def dec(func):
@@ -497,6 +503,7 @@ def save_to_disk():
 @with_lock(chain_lock)
 def load_from_disk():
     if not os.path.isfile(CHAIN_PATH):
+        init_genesis_block()
         return
     try:
         with open(CHAIN_PATH, "rb") as f:
@@ -506,6 +513,7 @@ def load_from_disk():
             for block in new_blocks:
                 connect_block(block)
     except Exception:
+        init_genesis_block()
         logger.exception('load chain failed, starting from genesis')
 
 
@@ -1207,7 +1215,6 @@ PORT = os.environ.get('TC_PORT', 9999)
 
 def main():
     load_from_disk()
-
     workers = []
     server = ThreadedTCPServer(('0.0.0.0', PORT), TCPHandler)
 
