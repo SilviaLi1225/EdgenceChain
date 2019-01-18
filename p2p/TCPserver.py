@@ -15,11 +15,12 @@ from typing import (
     Callable)
 from ds.Transaction import Transaction
 from ds.Block  import Block
+from ds.UnspentTxOut import UnspentTxOut
 from utils.Errors import BlockValidationError
 from utils.Utils import Utils
 from params.Params import Params
 
-
+from p2p.Message import Message
 
 from p2p.Peer import Peer
 from ds.UTXO_Set import UTXO_Set
@@ -35,13 +36,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
 
-class TCPHandler(socketserver.BaseRequestHandler):
-    def __init__(self, active_chain: BlockChain, side_branches: Iterable[BlockChain], orphan_blocks: Iterable[Block], \
-                 utxo_set: UTXO_Set, mempool: MemPool, peers: Iterable[Peer], mine_interrupt: threading.Event, \
-                 ibd_done: threading.Event, chain_lock: _thread.RLock):
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    def __init__(self, ip_port, tcp_handler_class, active_chain: BlockChain, side_branches: Iterable[BlockChain], \
+                 orphan_blocks: Iterable[Block], utxo_set: UTXO_Set, mempool: MemPool, peers: Iterable[Peer], \
+                 mine_interrupt: threading.Event, ibd_done: threading.Event, chain_lock: _thread.RLock):
+
+
         self.active_chain = active_chain
         self.side_branches = side_branches
         self.orphan_blocks = orphan_blocks
@@ -51,6 +52,60 @@ class TCPHandler(socketserver.BaseRequestHandler):
         self.mine_interrupt = mine_interrupt
         self.ibd_done = ibd_done
         self.chain_lock = chain_lock
+
+        socketserver.TCPServer.__init__(self, ip_port, tcp_handler_class)
+
+class TCPHandler(socketserver.BaseRequestHandler):
+
+
+    def handle(self):
+
+        # self.server is an instance of the ThreadedTCPServer
+        self.active_chain = self.server.active_chain
+        self.side_branches = self.server.side_branches
+        self.orphan_blocks = self.server.orphan_blocks
+        self.utxo_set = self.server.utxo_set
+        self.mempool = self.server.mempool
+        self.peers = self.server.peers
+        self.mine_interrupt = self.server.mine_interrupt
+        self.ibd_done = self.server.ibd_done
+        self.chain_lock = self.server.chain_lock
+
+
+
+        print('Begin to handle TCP request')
+        gs = dict()
+        gs['Block'], gs['Transaction'], gs['UnspentTxOut'], gs['Message'] = globals()['Block'], \
+                                        globals()['Transaction'], globals()['UnspentTxOut'], globals()['Message']
+
+        message = Utils.read_all_from_socket(self.request, gs)
+        print(message)
+        peer = Peer(*self.request.getpeername())
+
+
+        if not isinstance(message, Message):
+            logger.exception('message received is not Message')
+            return
+
+        action = int(message.action)
+        if action == Actions.BlocksSyncReq:
+            self.handleBlockSyncReq(message.data, peer)
+        elif action == Actions.BlocksSyncGet:
+            self.handleBlockSyncGet(message.data, peer)
+        elif action == Actions.TxStatusReq:
+            self.handleTxStatusReq(message.data, peer)
+        elif action == Actions.UTXO4Addr:
+            self.handleUTXO4Addr(message.data, peer)
+        elif action == Actions.Balance4Addr:
+            self.handleBalance4Addr(message.data, peer)
+        elif action == Actions.TxRev:
+            self.handleTxRev(message.data, peer)
+        elif action == Actions.BlockRev:
+            self.handleBlockRev(message.data, peer)
+        else:
+            logger.exception('received unwanted action request ')
+
+
 
     def locate_block(self, block_hash: str, chain: BlockChain=None) -> (Block, int, int):
         with self.chain_lock:
@@ -178,32 +233,4 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
         else:
             logger.info(f'{block} is not a Block object in handleBlockRev')
-
-
-    def handle(self):
-        message = Utils.read_all_from_socket(self.request)
-        peer = Peer(self.request.getpeername())
-
-
-        if not isinstance(message, Message):
-            logger.exception('message received is not Message')
-            return
-
-        message.action = int(message.action)
-        if message.action == Actions.BlocksSyncReq:
-            self.handleBlockSyncReq(message.data, peer)
-        elif message.action == Actions.BlocksSyncGet:
-            self.handleBlockSyncGet(message.data, peer)
-        elif message.action == Actions.TxStatusReq:
-            self.handleTxStatusReq(message.data, peer)
-        elif message.action == Actions.UTXO4Addr:
-            self.handleUTXO4Addr(message.data, peer)
-        elif message.action == Actions.Balance4Addr:
-            self.handleBalance4Addr(message.data, peer)
-        elif message.action == Actions.TxRev:
-            self.handleTxRev(message.data, peer)
-        elif message.action == Actions.BlockRev:
-            self.handleBlockRev(message.data, peer)
-        else:
-            logger.exception('received unwanted action request ')
 

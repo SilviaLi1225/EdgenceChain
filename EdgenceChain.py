@@ -170,7 +170,6 @@ class EdgenceChain(object):
                 f'for block {block.id}')
             self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
 
-        #logger.info(f'connecting block {block.id} to chain {chain_idx}')
         return chain_idx
 
     def initial_block_download(self):
@@ -211,13 +210,15 @@ class EdgenceChain(object):
                                 Utils.send_to_peer(Message(Actions.BlockRev, block), _peer)
 
 
-        Persistence.load_from_disk(self.active_chain, self.utxo_set, Params.CHAIN_FILE)
+        Persistence.load_from_disk(self.active_chain, self.utxo_set)
+
 
         workers = []
-        tcpHandler = TCPHandler(self.active_chain, self.side_branches, self.orphan_blocks, \
-                 self.utxo_set, self.mempool, self.peers, self.mine_interrupt, \
-                 self.ibd_done, self.chain_lock)
-        server = ThreadedTCPServer(('0.0.0.0', Params.PORT_CURRENT), tcpHandler)
+
+        server = ThreadedTCPServer(('0.0.0.0', Params.PORT_CURRENT), TCPHandler, self.active_chain, self.side_branches,\
+                                   self.orphan_blocks, self.utxo_set, self.mempool, self.peers, self.mine_interrupt, \
+                                              self.ibd_done, self.chain_lock)
+
         logger.info(f'[p2p] listening on {Params.PORT_CURRENT}')
         start_worker(workers, server.serve_forever)
 

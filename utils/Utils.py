@@ -14,7 +14,7 @@ from typing import (
     Callable)
 from _thread import RLock
 
-
+from params.Params import Params
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -94,21 +94,36 @@ class Utils(object):
 
     @classmethod
     def send_to_peer(cls, data, peer)->bool:
-        tries_left = 3
+        tries_left = Params.TRIES_MAXIMUM
 
         while tries_left > 0:
             try:
                 with socket.create_connection(peer(), timeout=1) as s:
                     s.sendall(cls.encode_socket_data(data))
             except Exception:
-                logger.exception(f'failed to send to peer {peer}  in {4-tries_left}th time')
+                logger.exception(f'failed to send to {peer}  in {Params.TRIES_MAXIMUM+1-tries_left}th time')
                 tries_left -= 1
                 time.sleep(2)
                 if tries_left <= 0:
                     return False
             else:
-                logger.info(f'succeed in sending to peer {peer} in {4-tries_left}th time')
+                logger.info(f'succeed in sending to {peer} in {Params.TRIES_MAXIMUM+1-tries_left}th time')
                 return True
+
+    @classmethod
+    def read_all_from_socket(cls, req, gs) -> object:
+        data = b''
+        # Our protocol is: first 4 bytes signify msg length.
+        msg_len = int(binascii.hexlify(req.recv(4) or b'\x00'), 16)
+
+        while msg_len > 0:
+            tdat = req.recv(1024)
+            data += tdat
+            msg_len -= len(tdat)
+
+        return cls.deserialize(data.decode(), gs) if data else None
+
+
 
     @classmethod
     def with_lock(cls, lock: RLock):

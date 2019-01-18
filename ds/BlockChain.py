@@ -164,9 +164,7 @@ class BlockChain(object):
             _reorg_if_necessary(active_chain, side_branches, mempool, utxo_set, mine_interrupt, peers)) \
                 or self.idx == Params.ACTIVE_CHAIN_IDX:
             mine_interrupt.set()
-            logger.info(
-                f'block accepted '
-                f'height={self.height - 1} txns={len(block.txns)}')
+
 
         return True
 

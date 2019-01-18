@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 
 from ds.Block import Block
+from ds.Transaction import Transaction
+from ds.TxIn import TxIn
+from ds.TxOut import TxOut
+
 from ds.MerkleNode import MerkleNode
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from params.Params import Params
@@ -44,6 +48,7 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
 
 
     def _connect_block(block: Block, active_chain: BlockChain, utxo_set: UTXO_Set) -> bool:
+
 
         def _validate_block() -> bool:
 
@@ -129,7 +134,7 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
         if not _validate_block():
             return False
 
-        logger.info(f'connecting block {block.id} to chain {active_chain.idx}')
+        logger.info(f'connecting the {len(active_chain.chain)+1}th block {block.id} to chain {active_chain.idx}')
         active_chain.chain.append(block)
 
         for tx in block.txns:
@@ -142,8 +147,6 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
         return True
 
 
-
-
     if not os.path.isfile(CHAIN_PATH):
         logger.info('chain storage file does not exist')
         return
@@ -151,13 +154,17 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
         if len(active_chain.chain) > 1:
             logger.exception('more blocks exists when loading chain from disk')
             return
-        else:
-            active_chain.chain.clear()
     try:
         with open(CHAIN_PATH, "rb") as f:
+            block_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
             msg_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
-            new_blocks = Utils.deserialize(f.read(msg_len))
+            gs = dict()
+            gs['Block'], gs['Transaction'], gs['TxIn'], gs['TxOut'] = globals()['Block'], globals()['Transaction'], \
+                                                                      globals()['TxIn'], globals()['TxOut']
+
+            new_blocks = Utils.deserialize(f.read(msg_len), gs)
             logger.info(f"loading chain from disk with {len(new_blocks)} blocks")
+
             for block in new_blocks[1:]:
                 if not _connect_block(block, active_chain, utxo_set):
                     return

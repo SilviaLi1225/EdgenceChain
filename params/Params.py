@@ -55,6 +55,8 @@ class Params:
     HALVE_SUBSIDY_AFTER_BLOCKS_NUM = int(210_000)
     ACTIVE_CHAIN_IDX = int(0)
 
+    TRIES_MAXIMUM = 1
+
     # list of peers
     CHUNK_SIZE = int(50)
     PORT_CURRENT = int(9999)
