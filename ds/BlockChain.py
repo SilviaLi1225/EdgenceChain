@@ -120,7 +120,7 @@ class BlockChain(object):
                 return True
 
             def _locate_block(block_hash: str, chain: BlockChain) -> (Block, int):
-                for height, block in enumerate(chain):
+                for height, block in enumerate(chain.chain):
                     if block.id == block_hash:
                         return (block, height)
                 return (None, None)

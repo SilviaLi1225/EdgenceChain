@@ -59,11 +59,11 @@ class Params:
 
     # list of peers
     CHUNK_SIZE = int(50)
-    PORT_CURRENT = int(9999)
+    PORT_CURRENT = int(9997)
     PEERS_FILE =  'peers.conf'
     CHAIN_FILE = 'chain.dat'
     WALLET_FILE = 'wallet.dat'
     PEERS: Iterable[Tuple] = list([#('127.0.0.1', 2221),
                       #('127.0.0.1', 99),
-                      ('localhost', 13)])
+                      ('localhost', 9999)])
 

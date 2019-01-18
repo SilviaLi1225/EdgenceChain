@@ -24,7 +24,8 @@ class Actions:
 
 class Message(NamedTuple):
     action: int
-    data: Union[str, Iterable[Block], str, Iterable[UnspentTxOut], int, Transaction, Block]
+    data: Union[str, Iterable[Block], Iterable[UnspentTxOut], int, Transaction, Block]
+    port: Union[None, int] = None
 
 if __name__ == "__main__":
 

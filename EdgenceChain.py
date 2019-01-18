@@ -149,37 +149,47 @@ class EdgenceChain(object):
         return block
 
     def check_block_place(self, block: Block) -> int:
-        if self.locate_block(block.id)[0]:
-            logger.debug(f'ignore block already seen: {block.id}')
-            return None
 
-        try:
-            chain_idx = block.validate_block(self.active_chain, self.side_branches, self.chain_lock)
-        except BlockValidationError as e:
-            logger.exception('block %s failed validation', block.id)
-            if e.to_orphan:
-                logger.info(f"saw orphan block {block.id}")
-                self.orphan_blocks.append(e.to_orphan)
-            return None
+        with self.chain_lock:
+            if self.locate_block(block.id)[0]:
+                logger.debug(f'ignore block already seen: {block.id}')
+                return None
 
-        # If `validate_block()` returned a non-existent chain index, we're
-        # creating a new side branch.
-        if chain_idx != Params.ACTIVE_CHAIN_IDX and len(self.side_branches) < chain_idx:
-            logger.info(
-                f'creating a new side branch (idx {chain_idx}) '
-                f'for block {block.id}')
-            self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
+            try:
+                chain_idx = block.validate_block(self.active_chain, self.side_branches, self.chain_lock)
+            except BlockValidationError as e:
+                logger.exception('block %s failed validation', block.id)
+                if e.to_orphan:
+                    logger.info(f"saw orphan block {block.id}")
+                    self.orphan_blocks.append(e.to_orphan)
+                return None
 
-        return chain_idx
+            # If `validate_block()` returned a non-existent chain index, we're
+            # creating a new side branch.
+            if chain_idx != Params.ACTIVE_CHAIN_IDX and len(self.side_branches) < chain_idx:
+                logger.info(
+                    f'creating a new side branch (idx {chain_idx}) '
+                    f'for block {block.id}')
+                self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
 
-    def initial_block_download(self):
-        peer_sample = random.sample(self.peers, len(self.peers))
-        for peer in peer_sample:
-            if Utils.send_to_peer(Message(Actions.BlocksSyncReq, self.active_chain.chain[-1].id), peer):
-                return True
-            else:
-                self.peers.remove(peer)
-        return False
+            return chain_idx
+
+    def initial_block_download(self) -> bool:
+
+        if self.peers:
+            logger.info(f'start initial block download from {len(self.peers)} peers')
+            peer_sample = random.sample(self.peers, len(self.peers))
+            for peer in peer_sample:
+                if Utils.send_to_peer(Message(Actions.BlocksSyncReq, self.active_chain.chain[-1].id, \
+                                              Params.PORT_CURRENT), peer):
+                    return True
+                else:
+                    self.peers.remove(peer)
+            self.ibd_done.set()
+            return False
+        else:
+            self.ibd_done.set()
+            return False
 
 
 
@@ -200,14 +210,13 @@ class EdgenceChain(object):
                         if chain_idx is not None:
                             if chain_idx == Params.ACTIVE_CHAIN_IDX:
                                 if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
-                                                                self.mempool, \
-                                                self.utxo_set, self.mine_interrupt, self.peers):
+                                                        self.mempool, self.utxo_set, self.mine_interrupt, self.peers):
                                     Persistence.save_to_disk(self.active_chain)
                             else:
                                 self.side_branches[chain_idx-1].chain.append(block)
 
                             for _peer in self.peers:
-                                Utils.send_to_peer(Message(Actions.BlockRev, block), _peer)
+                                Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
 
 
         Persistence.load_from_disk(self.active_chain, self.utxo_set)
@@ -218,15 +227,23 @@ class EdgenceChain(object):
         server = ThreadedTCPServer(('0.0.0.0', Params.PORT_CURRENT), TCPHandler, self.active_chain, self.side_branches,\
                                    self.orphan_blocks, self.utxo_set, self.mempool, self.peers, self.mine_interrupt, \
                                               self.ibd_done, self.chain_lock)
-
-        logger.info(f'[p2p] listening on {Params.PORT_CURRENT}')
         start_worker(workers, server.serve_forever)
 
-        with self.chain_lock:
-            if self.peers:
-                logger.info(f'start initial block download from {len(self.peers)} peers')
-            self.initial_block_download()
-            self.ibd_done.wait(1.0)
+
+        self.initial_block_download()
+        self.ibd_done.clear()
+        old_height = self.active_chain.height
+        new_height = old_height + 1
+        while new_height > old_height:
+            wait_times = 3
+            while not self.ibd_done.is_set():
+                time.sleep(10)
+                wait_times -= 1
+                if wait_times <= 0:
+                    break
+            new_height = self.active_chain.height
+        self.ibd_done.set()
+        self.ibd_done.wait(1.0)
 
 
         start_worker(workers, mine_forever)

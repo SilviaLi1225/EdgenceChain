@@ -110,6 +110,7 @@ class Utils(object):
                 logger.info(f'succeed in sending to {peer} in {Params.TRIES_MAXIMUM+1-tries_left}th time')
                 return True
 
+
     @classmethod
     def read_all_from_socket(cls, req, gs) -> object:
         data = b''

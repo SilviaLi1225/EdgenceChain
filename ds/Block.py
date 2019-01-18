@@ -89,8 +89,6 @@ class Block(NamedTuple):
                     value=5000000000, to_address='0000000000000000000000000000000000')], locktime=None)]
         )
 
-
-
     @classmethod
     def get_block_subsidy(cls, active_chain: object) -> int:
         halvings = active_chain.height// Params.HALVE_SUBSIDY_AFTER_BLOCKS_NUM
@@ -99,7 +97,6 @@ class Block(NamedTuple):
             return 0
 
         return 50 * Params.LET_PER_COIN // (2 ** halvings)
-
 
     def calculate_fees(self, utxo_set: UTXO_Set) -> int:
 
@@ -171,6 +168,7 @@ class Block(NamedTuple):
 
             return last_n_blocks[len(last_n_blocks) // 2].timestamp
 
+
         if not self.txns:
             raise BlockValidationError('txns empty')
 
@@ -227,6 +225,7 @@ class Block(NamedTuple):
                 msg = f"{txn} failed to validate"
                 logger.exception(msg)
                 raise BlockValidationError(msg)
+
 
         return prev_block_chain_idx
 

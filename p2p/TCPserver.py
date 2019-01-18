@@ -26,6 +26,9 @@ from p2p.Peer import Peer
 from ds.UTXO_Set import UTXO_Set
 from ds.MemPool import MemPool
 from ds.BlockChain import BlockChain
+from ds.TxIn import TxIn
+from ds.TxOut import TxOut
+
 from p2p.Message import Message
 from p2p.Message import Actions
 from persistence import Persistence
@@ -54,6 +57,7 @@ class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.chain_lock = chain_lock
 
         socketserver.TCPServer.__init__(self, ip_port, tcp_handler_class)
+        logger.info(f'[p2p] listening on {Params.PORT_CURRENT}')
 
 class TCPHandler(socketserver.BaseRequestHandler):
 
@@ -73,14 +77,15 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
 
 
-        print('Begin to handle TCP request')
+
         gs = dict()
-        gs['Block'], gs['Transaction'], gs['UnspentTxOut'], gs['Message'] = globals()['Block'], \
-                                        globals()['Transaction'], globals()['UnspentTxOut'], globals()['Message']
+        gs['Block'], gs['Transaction'], gs['UnspentTxOut'], gs['Message'], gs['TxIn'], gs['TxOut'] = globals()['Block'], \
+                    globals()['Transaction'], globals()['UnspentTxOut'], globals()['Message'], \
+                    globals()['TxIn'], globals()['TxOut']
+
 
         message = Utils.read_all_from_socket(self.request, gs)
-        print(message)
-        peer = Peer(*self.request.getpeername())
+        peer = Peer(self.request.getpeername()[0], int(message.port))
 
 
         if not isinstance(message, Message):
@@ -142,37 +147,42 @@ class TCPHandler(socketserver.BaseRequestHandler):
         return chain_idx
 
     def handleBlockSyncReq(self, blockid: str, peer: Peer):
-        logger.info(f"recieve BlockSyncReq from {peer}")
+        logger.info(f"receive BlockSyncReq from {peer}")
         height = self.locate_block(blockid, self.active_chain)[1] or 1
         with self.chain_lock:
             blocks = self.active_chain.chain[height:(height + Params.CHUNK_SIZE)]
 
-        logger.info(f"sending {len(blocks)} to {peer}")
-        Utils.send_to_peer(Message(Actions.BlocksSyncGet, blocks), peer)
+        logger.info(f"sending {len(blocks)} blocks to {peer}")
+        if Utils.send_to_peer(Message(Actions.BlocksSyncGet, blocks, Params.PORT_CURRENT), peer):
+            if peer not in self.peers:
+                self.peers.append(peer)
+
 
     def handleBlockSyncGet(self, blocks: Iterable[Block], peer: Peer):
-        logger.info(f"recieve BlockSyncGet from {peer}")
+        logger.info(f"recieve BlockSyncGet with {len(blocks)} blocks from {peer}")
         new_blocks = [block for block in blocks if not self.locate_block(block.id)[0]]
 
         if not new_blocks:
-            logger.info('initial block download complete')
+            logger.info('[p2p] initial block download complete')
             self.ibd_done.set()
             return
-        for block in new_blocks:
-            chain_idx  = self.check_block_place(block)
-            if chain_idx:
-                if chain_idx == Params.ACTIVE_CHAIN_IDX:
-                    if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
-                                                    self.mempool, \
-                                    self.utxo_set, self.mine_interrupt, self.peers):
-                        Persistence.save_to_disk(self.active_chain)
-                else:
-                    self.side_branches[chain_idx-1].chain.append(block)
+        with self.chain_lock:
+            for block in new_blocks:
+                chain_idx  = self.check_block_place(block)
 
-        new_tip_id = self.active_chain[-1].id
+                if chain_idx is not None:
+                    if chain_idx == Params.ACTIVE_CHAIN_IDX:
+                        if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
+                                                        self.mempool, \
+                                        self.utxo_set, self.mine_interrupt, self.peers):
+                            Persistence.save_to_disk(self.active_chain)
+                    else:
+                        self.side_branches[chain_idx-1].chain.append(block)
+
+        new_tip_id = self.active_chain.chain[-1].id
         logger.info(f'continuing initial block download at {new_tip_id}')
 
-        Utils.send_to_peer(Message(Actions.BlocksSyncReq, new_tip_id), peer)
+        Utils.send_to_peer(Message(Actions.BlocksSyncReq, new_tip_id, Params.PORT_CURRENT), peer)
 
     def handleTxStatusReq(self, txid: str, peer: Peer):
         def _txn_iterator(chain):
@@ -181,25 +191,25 @@ class TCPHandler(socketserver.BaseRequestHandler):
                 for height, block in enumerate(chain) for txn in block.txns)
         if txid in self.mempool.mempool:
             status = 'txid found in_mempool'
-            Utils.send_to_peer(Message(Actions.TxStatusRev, status), peer)
+            Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
             return
         for tx, block, height in _txn_iterator(self.active_chain.chain):
             if tx.id == txid:
                 status = f'Mined in {block.id} at height {height}'
-                Utils.send_to_peer(Message(Actions.TxStatusRev, status), peer)
+                Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
                 return
         status = f'{txid}:not_found'
-        Utils.send_to_peer(Message(Actions.TxStatusRev, status), peer)
+        Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
 
     def handleUTXO4Addr(self, addr: str, peer: Peer):
         utxos4addr = [u for u in self.utxo_set.utxoSet.values() if u.to_address == addr]
-        Utils.send_to_peer(Message(Actions.UTXO4AddrRev, utxos4addr), peer)
+        Utils.send_to_peer(Message(Actions.UTXO4AddrRev, utxos4addr, Params.PORT_CURRENT), peer)
 
     def handleBalance4Addr(self, addr: str, peer: Peer):
 
         utxos4addr = [u for u in self.utxo_set.utxoSet.values() if u.to_address == addr]
         val = sum(utxo.value for utxo in utxos4addr)
-        Utils.send_to_peer(Message(Actions.Balance4AddrRev, val), peer)
+        Utils.send_to_peer(Message(Actions.Balance4AddrRev, val, Params.PORT_CURRENT), peer)
 
     def handleTxRev(self, txn: Transaction, peer: Peer):
         if isinstance(txn, Transaction):
@@ -207,7 +217,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
                 logger.info(f"received txn {txn.id} from peer {peer}")
                 for _peer in self.peers:
                     if _peer != peer:
-                        Utils.send_to_peer(Message(Actions.TxRev, txn), _peer)
+                        Utils.send_to_peer(Message(Actions.TxRev, txn, Params.PORT_CURRENT), _peer)
         else:
             logger.info(f'{txn} is not a Transaction object in handleTxRev')
             return
@@ -229,8 +239,8 @@ class TCPHandler(socketserver.BaseRequestHandler):
                         self.side_branches[chain_idx-1].chain.append(block)
                     for _peer in self.peers:
                         if _peer != peer:
-                            Utils.send_to_peer(Message(Actions.BlockRev, block), _peer)
+                            Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
 
         else:
-            logger.info(f'{block} is not a Block object in handleBlockRev')
+            logger.info(f'{block} is not a Block')
 

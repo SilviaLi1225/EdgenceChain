@@ -23,12 +23,12 @@ class PoW(object):
         target = (1 << (256 - block.bits))
         mine_interrupt.clear()
 
-        logger.info(f'is mining after block {block.prev_block_hash}')
+        logger.info(f'[consensus] mining after block {block.prev_block_hash}')
         while int(Utils.sha256d(block.header(nonce)), 16) >= target:
             nonce += 1
 
             if nonce % 10000 == 0 and mine_interrupt.is_set():
-                logger.info('[mining] interrupted')
+                logger.info('[consensus] mining interrupted')
                 mine_interrupt.clear()
                 return None
 

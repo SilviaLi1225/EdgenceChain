@@ -56,6 +56,7 @@ class Peer(NamedTuple):
                     logger.info(f"loading peers with {len(peers)} hostnames")
             except Exception:
                 logger.exception('loading peers exception')
+                peers = []
         return peers
 
 
