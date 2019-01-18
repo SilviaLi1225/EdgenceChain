@@ -30,6 +30,9 @@ class Peer(NamedTuple):
     def __call__(self):
         return str(self.ip), int(self.port)
 
+    def __eq__(self, other):
+        return self.ip == other.ip and self.port == other.port
+
     @property
     def id(self):
         return Utils.sha256d(Utils.serialize(self))

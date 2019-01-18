@@ -40,26 +40,13 @@ logger = logging.getLogger(__name__)
 
 
 class Block(NamedTuple):
-    # A version integer.
+
     version: int
-
-    # A hash of the previous block's header.
     prev_block_hash: str
-
-    # A hash of the Merkle tree containing all txns.
     merkle_hash: str
-
-    # A UNIX timestamp of when this block was created.
     timestamp: int
-
-    # The difficulty target; i.e. the hash of this block header must be under
-    # (2 ** 256 >> bits) to consider work proved.
     bits: int
-
-    # The value that's incremented in an attempt to get the block header to
-    # hash to a value below `bits`.
     nonce: int
-
     txns: Iterable[Transaction]
 
     def header(self, nonce=None) -> str:
@@ -93,8 +80,7 @@ class Block(NamedTuple):
     def get_block_subsidy(cls, active_chain: object) -> int:
         halvings = active_chain.height// Params.HALVE_SUBSIDY_AFTER_BLOCKS_NUM
 
-        if halvings >= 64:
-            return 0
+        if halvings >= 64: return 0
 
         return 50 * Params.LET_PER_COIN // (2 ** halvings)
 
@@ -120,114 +106,117 @@ class Block(NamedTuple):
 
     def validate_block(self, active_chain: object, side_branches: Iterable[object], chain_lock: RLock) -> int:
 
-        def _locate_block(block_hash: str) -> (Block, int, int):
-            blockchains = [active_chain, *side_branches]
+        with chain_lock:
 
-            for _, blockchain in enumerate(blockchains):
-                chain_idx = blockchain.idx
-                for height, block in enumerate(blockchain.chain):
-                    if block.id == block_hash:
-                        return (block, height, chain_idx)
-            return (None, None, None)
+            def _locate_block(block_hash: str) -> (Block, int, int):
+                blockchains = [active_chain, *side_branches]
 
-        def _get_next_work_required(prev_block_hash: str) -> int:
-            """
-            Based on the chain, return the number of difficulty bits the next block
-            must solve.
-            """
-            if not prev_block_hash:
-                return Params.INITIAL_DIFFICULTY_BITS
+                for _, blockchain in enumerate(blockchains):
+                    chain_idx = blockchain.idx
+                    for height, block in enumerate(blockchain.chain):
+                        if block.id == block_hash:
+                            return (block, height, chain_idx)
+                return (None, None, None)
 
-            (prev_block, prev_height, _) = _locate_block(self.prev_block_hash)
+            def _get_next_work_required(prev_block_hash: str) -> int:
+                """
+                Based on the chain, return the number of difficulty bits the next block
+                must solve.
+                """
+                if not prev_block_hash:
+                    return Params.INITIAL_DIFFICULTY_BITS
 
-            if (prev_height + 1) % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
-                return prev_block.bits
+                (prev_block, prev_height, _) = _locate_block(self.prev_block_hash)
 
-            with chain_lock:
-                period_start_block = active_chain[max(
-                    prev_height - (Params.DIFFICULTY_PERIOD_IN_BLOCKS - 1), 0)]
+                if (prev_height + 1) % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
+                    return prev_block.bits
 
-            actual_time_taken = prev_block.timestamp - period_start_block.timestamp
+                with chain_lock:
+                    period_start_block = active_chain[max(
+                        prev_height - (Params.DIFFICULTY_PERIOD_IN_BLOCKS - 1), 0)]
 
-            if actual_time_taken < Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
-                # Increase the difficulty
-                return prev_block.bits + 1
-            elif actual_time_taken > Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
-                return prev_block.bits - 1
-            else:
-                # Wow, that's unlikely.
-                return prev_block.bits
+                actual_time_taken = prev_block.timestamp - period_start_block.timestamp
 
-        @Utils.with_lock(chain_lock)
-        def _get_median_time_past(num_last_blocks: int) -> int:
-            """Grep for: GetMedianTimePast."""
-            last_n_blocks = active_chain.chain[::-1][:num_last_blocks]
-
-            if not last_n_blocks:
-                return 0
-
-            return last_n_blocks[len(last_n_blocks) // 2].timestamp
+                if actual_time_taken < Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
+                    # Increase the difficulty
+                    return prev_block.bits + 1
+                elif actual_time_taken > Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
+                    return prev_block.bits - 1
+                else:
+                    # Wow, that's unlikely.
+                    return prev_block.bits
 
 
-        if not self.txns:
-            raise BlockValidationError('txns empty')
+            def _get_median_time_past(num_last_blocks: int) -> int:
+                """Grep for: GetMedianTimePast."""
+                with chain_lock:
+                    last_n_blocks = active_chain.chain[::-1][:num_last_blocks]
 
-        if self.timestamp - time.time() > Params.MAX_FUTURE_BLOCK_TIME:
-            raise BlockValidationError('Block timestamp too far in future')
+                    if not last_n_blocks:
+                        return 0
 
-        if int(self.id, 16) > (1 << (256 - self.bits)):
-            raise BlockValidationError("Block header doesn't satisfy bits")
+                    return last_n_blocks[len(last_n_blocks) // 2].timestamp
 
-        if [i for (i, tx) in enumerate(self.txns) if tx.is_coinbase] != [0]:
-            raise BlockValidationError('First txn must be coinbase and no more')
 
-        try:
-            for i, txn in enumerate(self.txns):
-                txn.validate_basics(as_coinbase=(i == 0))
-        except TxnValidationError:
-            logger.exception(f"Transaction {txn} in block {self.id} failed to validate")
-            raise BlockValidationError('Invalid txn {txn.id}')
+            if not self.txns:
+                raise BlockValidationError('txns empty')
 
-        if MerkleNode.get_merkle_root_of_txns(self.txns).val != self.merkle_hash:
-            raise BlockValidationError('Merkle hash invalid')
+            if self.timestamp - time.time() > Params.MAX_FUTURE_BLOCK_TIME:
+                raise BlockValidationError('Block timestamp too far in future')
 
-        if self.timestamp <= _get_median_time_past(11):
-            raise BlockValidationError('timestamp too old')
+            if int(self.id, 16) > (1 << (256 - self.bits)):
+                raise BlockValidationError("Block header doesn't satisfy bits")
 
-        if not self.prev_block_hash and not active_chain:
-            # This is the genesis block.
-            prev_block_chain_idx = Params.ACTIVE_CHAIN_IDX
-        else:
-            prev_block, prev_block_height, prev_block_chain_idx = _locate_block(
-                self.prev_block_hash)
+            if [i for (i, tx) in enumerate(self.txns) if tx.is_coinbase] != [0]:
+                raise BlockValidationError('First txn must be coinbase and no more')
 
-            if not prev_block:
-                raise BlockValidationError(
-                    f'prev block {self.prev_block_hash} not found in any chain',
-                    to_orphan=self)
-
-            # No more validation for a block getting attached to a branch.
-            if prev_block_chain_idx != Params.ACTIVE_CHAIN_IDX:
-                return prev_block_chain_idx
-
-            # Prev. block found in active chain, but isn't tip => new fork.
-            elif prev_block != active_chain.chain[-1]:
-                return prev_block_chain_idx + 1  # Non-existent
-
-        if _get_next_work_required(self.prev_block_hash) != self.bits:
-            raise BlockValidationError('bits is incorrect')
-
-        for txn in self.txns[1:]:
             try:
-                txn.validate_txn(siblings_in_block=self.txns[1:],
-                             allow_utxo_from_mempool=False)
+                for i, txn in enumerate(self.txns):
+                    txn.validate_basics(as_coinbase=(i == 0))
             except TxnValidationError:
-                msg = f"{txn} failed to validate"
-                logger.exception(msg)
-                raise BlockValidationError(msg)
+                logger.exception(f"Transaction {txn} in block {self.id} failed to validate")
+                raise BlockValidationError('Invalid txn {txn.id}')
+
+            if MerkleNode.get_merkle_root_of_txns(self.txns).val != self.merkle_hash:
+                raise BlockValidationError('Merkle hash invalid')
+
+            if self.timestamp <= _get_median_time_past(11):
+                raise BlockValidationError('timestamp too old')
+
+            if not self.prev_block_hash and not active_chain:
+                # This is the genesis block.
+                prev_block_chain_idx = Params.ACTIVE_CHAIN_IDX
+            else:
+                prev_block, prev_block_height, prev_block_chain_idx = _locate_block(
+                    self.prev_block_hash)
+
+                if not prev_block:
+                    raise BlockValidationError(
+                        f'prev block {self.prev_block_hash} not found in any chain',
+                        to_orphan=self)
+
+                # No more validation for a block getting attached to a branch.
+                if prev_block_chain_idx != Params.ACTIVE_CHAIN_IDX:
+                    return prev_block_chain_idx
+
+                # Prev. block found in active chain, but isn't tip => new fork.
+                elif prev_block != active_chain.chain[-1]:
+                    return prev_block_chain_idx + 1  # Non-existent
+
+            if _get_next_work_required(self.prev_block_hash) != self.bits:
+                raise BlockValidationError('bits is incorrect')
+
+            for txn in self.txns[1:]:
+                try:
+                    txn.validate_txn(siblings_in_block=self.txns[1:],
+                                 allow_utxo_from_mempool=False)
+                except TxnValidationError:
+                    msg = f"{txn} failed to validate"
+                    logger.exception(msg)
+                    raise BlockValidationError(msg)
 
 
-        return prev_block_chain_idx
+            return prev_block_chain_idx
 
 
 

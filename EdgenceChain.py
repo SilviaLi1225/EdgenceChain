@@ -200,6 +200,7 @@ class EdgenceChain(object):
             workers[-1].start()
 
         def mine_forever():
+            logger.info(f'thread for mining is started....')
             while True:
                 block = self.assemble_and_solve_block()
 
@@ -211,15 +212,16 @@ class EdgenceChain(object):
                             if chain_idx == Params.ACTIVE_CHAIN_IDX:
                                 if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
                                                         self.mempool, self.utxo_set, self.mine_interrupt, self.peers):
-                                    Persistence.save_to_disk(self.active_chain)
+                                    with self.chain_lock:
+                                        Persistence.save_to_disk(self.active_chain)
                             else:
                                 self.side_branches[chain_idx-1].chain.append(block)
 
                             for _peer in self.peers:
                                 Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
 
-
-        Persistence.load_from_disk(self.active_chain, self.utxo_set)
+        with self.chain_lock:
+            Persistence.load_from_disk(self.active_chain, self.utxo_set)
 
 
         workers = []
@@ -235,6 +237,7 @@ class EdgenceChain(object):
         old_height = self.active_chain.height
         new_height = old_height + 1
         while new_height > old_height:
+            old_height = new_height
             wait_times = 3
             while not self.ibd_done.is_set():
                 time.sleep(10)
@@ -243,7 +246,6 @@ class EdgenceChain(object):
                     break
             new_height = self.active_chain.height
         self.ibd_done.set()
-        self.ibd_done.wait(1.0)
 
 
         start_worker(workers, mine_forever)

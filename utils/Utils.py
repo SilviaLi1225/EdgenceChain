@@ -126,12 +126,3 @@ class Utils(object):
 
 
 
-    @classmethod
-    def with_lock(cls, lock: RLock):
-        def dec(func):
-            @wraps(func)
-            def wrapper(*args, **kwargs):
-                with lock:
-                    return func(*args, **kwargs)
-            return wrapper
-        return dec

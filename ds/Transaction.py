@@ -36,9 +36,6 @@ class Transaction(NamedTuple):
     txouts: Iterable[TxOut]
 
 
-    # The block number or timestamp at which this transaction is unlocked.
-    # < 500000000: Block number at which this transaction is unlocked.
-    # >= 500000000: UNIX timestamp at which this transaction is unlocked.
     locktime: int = None
 
     @property

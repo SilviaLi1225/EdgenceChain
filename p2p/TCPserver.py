@@ -82,15 +82,18 @@ class TCPHandler(socketserver.BaseRequestHandler):
         gs['Block'], gs['Transaction'], gs['UnspentTxOut'], gs['Message'], gs['TxIn'], gs['TxOut'] = globals()['Block'], \
                     globals()['Transaction'], globals()['UnspentTxOut'], globals()['Message'], \
                     globals()['TxIn'], globals()['TxOut']
-
-
-        message = Utils.read_all_from_socket(self.request, gs)
-        peer = Peer(self.request.getpeername()[0], int(message.port))
+        try:
+            message = Utils.read_all_from_socket(self.request, gs)
+        except:
+            logger.exception(f'Invalid meassage from peer {self.request.getpeername()[0]}')
+            return
 
 
         if not isinstance(message, Message):
-            logger.exception('message received is not Message')
+            logger.exception(f'Not a Message from peer {self.request.getpeername()[0]}')
             return
+        else:
+            peer = Peer(self.request.getpeername()[0], int(message.port))
 
         action = int(message.action)
         if action == Actions.BlocksSyncReq:
@@ -133,16 +136,18 @@ class TCPHandler(socketserver.BaseRequestHandler):
             logger.exception('block %s failed validation', block.id)
             if e.to_orphan:
                 logger.info(f"saw orphan block {block.id}")
-                self.orphan_blocks.append(e.to_orphan)
+                with self.chain_lock:
+                    self.orphan_blocks.append(e.to_orphan)
             return None
 
         # If `validate_block()` returned a non-existent chain index, we're
         # creating a new side branch.
-        if chain_idx != Params.ACTIVE_CHAIN_IDX and len(self.side_branches) < chain_idx:
-            logger.info(
-                f'creating a new side branch (idx {chain_idx}) '
-                f'for block {block.id}')
-            self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
+        with self.chain_lock:
+            if chain_idx != Params.ACTIVE_CHAIN_IDX and len(self.side_branches) < chain_idx:
+                logger.info(
+                    f'creating a new side branch (idx {chain_idx}) '
+                    f'for block {block.id}')
+                self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
 
         return chain_idx
 
@@ -163,7 +168,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
         new_blocks = [block for block in blocks if not self.locate_block(block.id)[0]]
 
         if not new_blocks:
-            logger.info('[p2p] initial block download complete')
+            logger.info('[p2p] initial block download complete, begin to mine')
             self.ibd_done.set()
             return
         with self.chain_lock:
@@ -175,11 +180,15 @@ class TCPHandler(socketserver.BaseRequestHandler):
                         if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
                                                         self.mempool, \
                                         self.utxo_set, self.mine_interrupt, self.peers):
-                            Persistence.save_to_disk(self.active_chain)
+                            with self.chain_lock:
+                                Persistence.save_to_disk(self.active_chain)
                     else:
                         self.side_branches[chain_idx-1].chain.append(block)
+                else:
+                    logger.info(f'do nothing for block {block.id}')
 
-        new_tip_id = self.active_chain.chain[-1].id
+
+            new_tip_id = self.active_chain.chain[-1].id
         logger.info(f'continuing initial block download at {new_tip_id}')
 
         Utils.send_to_peer(Message(Actions.BlocksSyncReq, new_tip_id, Params.PORT_CURRENT), peer)
@@ -189,35 +198,39 @@ class TCPHandler(socketserver.BaseRequestHandler):
             return (
                 (txn, block, height)
                 for height, block in enumerate(chain) for txn in block.txns)
-        if txid in self.mempool.mempool:
-            status = 'txid found in_mempool'
-            Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
-            return
-        for tx, block, height in _txn_iterator(self.active_chain.chain):
-            if tx.id == txid:
-                status = f'Mined in {block.id} at height {height}'
+        with self.chain_lock:
+            if txid in self.mempool.mempool:
+                status = 'txid found in_mempool'
                 Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
                 return
+            for tx, block, height in _txn_iterator(self.active_chain.chain):
+                if tx.id == txid:
+                    status = f'Mined in {block.id} at height {height}'
+                    Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
+                    return
         status = f'{txid}:not_found'
         Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
 
     def handleUTXO4Addr(self, addr: str, peer: Peer):
-        utxos4addr = [u for u in self.utxo_set.utxoSet.values() if u.to_address == addr]
+        with self.chain_lock:
+            utxos4addr = [u for u in self.utxo_set.utxoSet.values() if u.to_address == addr]
         Utils.send_to_peer(Message(Actions.UTXO4AddrRev, utxos4addr, Params.PORT_CURRENT), peer)
 
     def handleBalance4Addr(self, addr: str, peer: Peer):
 
-        utxos4addr = [u for u in self.utxo_set.utxoSet.values() if u.to_address == addr]
+        with self.chain_lock:
+            utxos4addr = [u for u in self.utxo_set.utxoSet.values() if u.to_address == addr]
         val = sum(utxo.value for utxo in utxos4addr)
         Utils.send_to_peer(Message(Actions.Balance4AddrRev, val, Params.PORT_CURRENT), peer)
 
     def handleTxRev(self, txn: Transaction, peer: Peer):
         if isinstance(txn, Transaction):
-            if self.mempool.add_txn_to_mempool(txn, self.utxo_set):
-                logger.info(f"received txn {txn.id} from peer {peer}")
-                for _peer in self.peers:
-                    if _peer != peer:
-                        Utils.send_to_peer(Message(Actions.TxRev, txn, Params.PORT_CURRENT), _peer)
+            with self.chain_lock:
+                if self.mempool.add_txn_to_mempool(txn, self.utxo_set):
+                    logger.info(f"received txn {txn.id} from peer {peer}")
+                    for _peer in self.peers:
+                        if _peer != peer:
+                            Utils.send_to_peer(Message(Actions.TxRev, txn, Params.PORT_CURRENT), _peer)
         else:
             logger.info(f'{txn} is not a Transaction object in handleTxRev')
             return
@@ -227,19 +240,24 @@ class TCPHandler(socketserver.BaseRequestHandler):
             logger.info(f"received block {block.id} from peer {peer}")
             with self.chain_lock:
                 chain_idx  = self.check_block_place(block)
-                if chain_idx:
+                if chain_idx is not None:
 
                     if peer not in self.peers:
                         self.peers.append(peer)
 
                     if chain_idx == Params.ACTIVE_CHAIN_IDX:
-                        self.active_chain.connect_block(block)
-                        Persistence.save_to_disk(self.active_chain)
+                        self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
+                                                        self.mempool, \
+                                        self.utxo_set, self.mine_interrupt, self.peers)
+                        with self.chain_lock:
+                            Persistence.save_to_disk(self.active_chain)
                     else:
                         self.side_branches[chain_idx-1].chain.append(block)
                     for _peer in self.peers:
                         if _peer != peer:
                             Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
+                else:
+                    logger.info(f'do nothing for block {block.id}')
 
         else:
             logger.info(f'{block} is not a Block')

@@ -5,9 +5,7 @@ import time
 import threading
 import logging
 import os
-from typing import (
-    Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
-    Callable)
+from typing import Union
 
 
 logging.basicConfig(
@@ -16,6 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class PoW(object):
+
     @classmethod
     def mine(cls, block: Block, mine_interrupt: threading.Event) -> Union[Block, None]:
         start = time.time()
@@ -27,7 +26,7 @@ class PoW(object):
         while int(Utils.sha256d(block.header(nonce)), 16) >= target:
             nonce += 1
 
-            if nonce % 10000 == 0 and mine_interrupt.is_set():
+            if mine_interrupt.is_set():
                 logger.info('[consensus] mining interrupted')
                 mine_interrupt.clear()
                 return None
@@ -36,6 +35,6 @@ class PoW(object):
         duration = int(time.time() - start) or 0.001
         khs = (block.nonce // duration) // 1000
         logger.info(
-            f'[mining] block found! {duration} s - {khs} KH/s - {block.id}')
+            f'[consensus] mining block found! {duration} s - {khs} KH/s - {block.id}')
 
         return block
