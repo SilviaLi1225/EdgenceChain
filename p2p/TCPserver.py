@@ -85,18 +85,18 @@ class TCPHandler(socketserver.BaseRequestHandler):
         try:
             message = Utils.read_all_from_socket(self.request, gs)
         except:
-            logger.exception(f'Invalid meassage from peer {self.request.getpeername()[0]}')
+            logger.exception(f'[p2p] Invalid meassage from peer {self.request.getpeername()[0]}')
             return
 
 
         if not isinstance(message, Message):
-            logger.exception(f'Not a Message from peer {self.request.getpeername()[0]}')
+            logger.exception(f'[p2p] Not a Message from peer {self.request.getpeername()[0]}')
             return
         else:
             peer = Peer(str(self.request.getpeername()[0]), int(message.port))
             if (peer.ip == '127.0.0.1' and peer.port == Params.PORT_CURRENT) or \
                 (peer.ip == 'localhost' and peer.port == Params.PORT_CURRENT):
-                logger.exception(f'new found {peer} is the current node itself, and does nothing for it')
+                logger.exception(f'[p2p] new found {peer} is the current node itself, and does nothing for it')
                 return
 
 
@@ -134,7 +134,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
     def check_block_place(self, block: Block) -> int:
         if self.locate_block(block.id)[0]:
-            logger.debug(f'ignore block already seen: {block.id}')
+            logger.debug(f'[p2p] ignore block already seen: {block.id}')
             return None
 
         try:
@@ -142,17 +142,17 @@ class TCPHandler(socketserver.BaseRequestHandler):
         except BlockValidationError as e:
             logger.exception('block %s failed validation', block.id)
             if e.to_orphan:
-                logger.info(f"saw orphan block {block.id}")
-                with self.chain_lock:
-                    self.orphan_blocks.append(e.to_orphan)
-            return None
+                logger.info(f"[p2p] saw orphan block {block.id}")
+                return -1
+            else:
+                return -2
 
         # If `validate_block()` returned a non-existent chain index, we're
         # creating a new side branch.
         with self.chain_lock:
             if chain_idx != Params.ACTIVE_CHAIN_IDX and len(self.side_branches) < chain_idx:
                 logger.info(
-                    f'creating a new side branch (idx {chain_idx}) '
+                    f'[p2p] creating a new side branch (idx {chain_idx}) '
                     f'for block {block.id}')
                 self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
 
@@ -175,21 +175,22 @@ class TCPHandler(socketserver.BaseRequestHandler):
                 logger.info(f'[p2p] add peer {peer} into peer list')
                 Peer.save_peers(self.peers)
 
-
-
     def handleBlockSyncGet(self, blocks: Iterable[Block], peer: Peer):
         logger.info(f"[p2p] recieve BlockSyncGet with {len(blocks)} blocks from {peer}")
         new_blocks = [block for block in blocks if not self.locate_block(block.id)[0]]
 
         if not new_blocks:
-            logger.info('[p2p] initial block download complete, begin to mine')
+            logger.info('[p2p] initial block download complete, prepare to mine')
             self.ibd_done.set()
             return
+        else:
+            self.ibd_done.clear()
+
         with self.chain_lock:
             for block in new_blocks:
                 chain_idx  = self.check_block_place(block)
 
-                if chain_idx is not None:
+                if chain_idx >= 0:
                     if chain_idx == Params.ACTIVE_CHAIN_IDX:
                         if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
                                                         self.mempool, \
@@ -198,6 +199,9 @@ class TCPHandler(socketserver.BaseRequestHandler):
                                 Persistence.save_to_disk(self.active_chain)
                     else:
                         self.side_branches[chain_idx-1].chain.append(block)
+                elif chain_idx <= -1:
+                    logger.info(f'[p2p] orphan or wrong block {block.id}')
+                    break
                 else:
                     logger.info(f'[p2p] do nothing for block {block.id}')
 
@@ -239,22 +243,22 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
     def handleTxRev(self, txn: Transaction, peer: Peer):
         if isinstance(txn, Transaction):
-            logger.info(f"received txn {txn.id} from peer {peer}")
+            logger.info(f"[p2p] received txn {txn.id} from peer {peer}")
             with self.chain_lock:
                 if self.mempool.add_txn_to_mempool(txn, self.utxo_set):
                     for _peer in self.peers:
                         if _peer != peer:
                             Utils.send_to_peer(Message(Actions.TxRev, txn, Params.PORT_CURRENT), _peer)
         else:
-            logger.info(f'{txn} is not a Transaction object in handleTxRev')
+            logger.info(f'[p2p] {txn} is not a Transaction object in handleTxRev')
             return
 
     def handleBlockRev(self, block: Block, peer: Peer):
         if isinstance(block, Block):
-            logger.info(f"received block {block.id} from peer {peer}")
+            logger.info(f"[p2p] received block {block.id} from peer {peer}")
             with self.chain_lock:
                 chain_idx  = self.check_block_place(block)
-                if chain_idx is not None:
+                if chain_idx >= 0:
 
                     if peer not in self.peers:
                         self.peers.append(peer)
@@ -272,9 +276,11 @@ class TCPHandler(socketserver.BaseRequestHandler):
                     for _peer in self.peers:
                         if _peer != peer:
                             Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
-                else:
-                    logger.info(f'do nothing for block {block.id}')
+                elif chain_idx is None:
+                    logger.info(f'[p2p] already seen block {block.id}, and do nothing')
+                elif chain_idx == -1:
+                    self.orphan_blocks.append(block)
 
         else:
-            logger.info(f'{block} is not a Block')
+            logger.info(f'[p2p] {block} is not a Block')
 

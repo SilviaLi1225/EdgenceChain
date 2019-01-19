@@ -37,7 +37,7 @@ class MemPool(object):
         try:
             txout = self.mempool[txid].txouts[idx]
         except Exception:
-            logger.debug("Couldn't find utxo in mempool for %s", txin)
+            logger.debug(f"[ds] could not find utxo in mempool for txin {txin}")
             return None
 
         return UnspentTxOut(
@@ -67,18 +67,18 @@ class MemPool(object):
                 in_mempool = self.find_utxo_in_mempool(txin)
 
                 if not in_mempool:
-                    logger.debug(f"Couldn't find UTXO for {txin}")
+                    logger.debug(f"[ds] Couldn't find UTXO for {txin}")
                     return None
 
                 block = try_add_to_block(block, in_mempool.txid)
                 if not block:
-                    logger.debug(f"Couldn't add parent")
+                    logger.debug(f"[ds] Couldn't add parent")
                     return None
 
             newblock = block._replace(txns=[*block.txns, tx])
 
             if check_block_size(newblock):
-                logger.debug(f'added tx {tx.id} to block')
+                logger.debug(f'[ds] added tx {tx.id} to block')
                 added_to_block.add(txid)
                 return newblock
             else:
@@ -97,20 +97,20 @@ class MemPool(object):
 
     def add_txn_to_mempool(self, txn: Transaction, utxo_set: UTXO_Set) -> bool:
         if txn.id in self.mempool:
-            logger.info(f'txn {txn.id} already seen')
+            logger.info(f'[ds] txn {txn.id} already seen')
             return None
 
         try:
             txn.validate_txn(utxo_set, self.mempool)
         except TxnValidationError as e:
             if e.to_orphan:
-                logger.info(f'txn {e.to_orphan.id} submitted as orphan')
+                logger.info(f'[ds] txn {e.to_orphan.id} submitted as orphan')
                 self.orphan_txns.append(e.to_orphan)
             else:
-                logger.exception(f'txn rejected')
+                logger.exception(f'[ds] txn rejected')
             return None
         else:
-            logger.info(f'txn {txn.id} added to mempool')
+            logger.info(f'[ds] txn {txn.id} added to mempool')
             self.mempool[txn.id] = txn
 
             return True

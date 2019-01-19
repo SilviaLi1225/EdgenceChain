@@ -174,7 +174,7 @@ class Block(NamedTuple):
                 for i, txn in enumerate(self.txns):
                     txn.validate_basics(as_coinbase=(i == 0))
             except TxnValidationError:
-                logger.exception(f"Transaction {txn} in block {self.id} failed to validate")
+                logger.exception(f"[ds] Transaction {txn} in block {self.id} failed to validate")
                 raise BlockValidationError('Invalid txn {txn.id}')
 
             if MerkleNode.get_merkle_root_of_txns(self.txns).val != self.merkle_hash:
@@ -211,7 +211,7 @@ class Block(NamedTuple):
                     txn.validate_txn(siblings_in_block=self.txns[1:],
                                  allow_utxo_from_mempool=False)
                 except TxnValidationError:
-                    msg = f"{txn} failed to validate"
+                    msg = f"[ds] {txn} failed to validate"
                     logger.exception(msg)
                     raise BlockValidationError(msg)
 

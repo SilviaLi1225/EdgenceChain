@@ -102,7 +102,7 @@ class Transaction(NamedTuple):
                     txin.to_spend, txin.unlock_pk, txin.sequence, txn.txouts)
                 verifying_key.verify(txin.unlock_sig, spend_msg)
             except Exception:
-                logger.exception('Key verification failed')
+                logger.exception(f'[ds] Key verification failed')
                 raise TxUnlockError("Signature doesn't match")
             return True        
 
@@ -113,7 +113,7 @@ class Transaction(NamedTuple):
                 with open(chainfile, "rb") as f:
                     height = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
             except Exception:
-                logger.exception('read block height failed')
+                logger.exception(f'[ds] read block height failed')
                 return 0
             return height
 

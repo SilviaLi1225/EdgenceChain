@@ -152,23 +152,22 @@ class EdgenceChain(object):
 
         with self.chain_lock:
             if self.locate_block(block.id)[0]:
-                logger.debug(f'ignore block already seen: {block.id}')
+                logger.debug(f'mined block {block.id} but already seen, impossible')
                 return None
 
             try:
                 chain_idx = block.validate_block(self.active_chain, self.side_branches, self.chain_lock)
             except BlockValidationError as e:
-                logger.exception('block %s failed validation', block.id)
+                logger.exception('a mined block %s but failed validation', block.id)
                 if e.to_orphan:
-                    logger.info(f"saw orphan block {block.id}")
-                    self.orphan_blocks.append(e.to_orphan)
+                    logger.info(f"mined an orphan block {block.id}, just discard it and go")
                 return None
 
             # If `validate_block()` returned a non-existent chain index, we're
             # creating a new side branch.
             if chain_idx != Params.ACTIVE_CHAIN_IDX and len(self.side_branches) < chain_idx:
                 logger.info(
-                    f'creating a new side branch (idx {chain_idx}) '
+                    f'creating a new side branch (idx={chain_idx}) '
                     f'for block {block.id}')
                 self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
 
@@ -231,7 +230,7 @@ class EdgenceChain(object):
         self.initial_block_download()
         old_height = self.active_chain.height
         new_height = old_height + 1
-        while new_height > old_height and not self.ibd_done.is_set():
+        while new_height > old_height:
             logger.info(f'{new_height-old_height} more blocks got this time, waiting for blocks syncing ...')
             old_height = new_height
             wait_times = 3

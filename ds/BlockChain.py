@@ -61,7 +61,7 @@ class BlockChain(object):
             for i in range(len(tx.txouts)):
                 utxo_set.rm_from_utxo(tx.id, i)
 
-        logger.info(f'block {block.id} disconnected')
+        logger.info(f'[ds] block {block.id} disconnected')
         return self.chain.pop()
 
     # connect_block: block,active_chain, side_branches, mempool, utxo_set, mine_interrupt, peers
@@ -93,7 +93,7 @@ class BlockChain(object):
                 assert branch[0].prev_block_hash == active_chain[-1].id
 
                 def rollback_reorg():
-                    logger.info(f'reorg of idx {branch_idx} to active_chain failed')
+                    logger.info(f'[ds] reorg of idx {branch_idx} to active_chain failed')
                     list(disconnect_to_fork())  # Force the gneerator to eval.
 
                     for block in old_active:
@@ -111,9 +111,7 @@ class BlockChain(object):
                 side_branches.pop(branch_idx - 1)
                 side_branches.append(old_active)
 
-                logger.info(
-                    'chain reorg! New height: %s, tip: %s',
-                    len(active_chain), active_chain[-1].id)
+                logger.info(f'[ds] chain reorg! New height: {active_chain.height}, tip: {active_chain.chain[-1].id}')
 
                 return True
 
@@ -136,7 +134,7 @@ class BlockChain(object):
 
                 if branch_height > active_height:
                     logger.info(
-                        f'attempting reorg of idx {branch_idx} to active_chain: '
+                        f'[ds] attempting reorg of idx {branch_idx} to active_chain: '
                         f'new height of {branch_height} (vs. {active_height})')
                     reorged |= _try_reorg(blockchain, branch_idx, fork_idx, active_chain, side_branches, mempool, \
                                          utxo_set, mine_interrupt, peers)
@@ -145,7 +143,7 @@ class BlockChain(object):
 
 
 
-        logger.info(f'connecting block {block.id} to chain {self.idx}')
+        logger.info(f'[ds] connecting block {block.id} to chain {self.idx}')
         self.chain.append(block)
         # If we added to the active chain, perform upkeep on utxo_set and mempool.
         if self.idx == Params.ACTIVE_CHAIN_IDX:

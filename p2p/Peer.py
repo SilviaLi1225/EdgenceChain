@@ -52,10 +52,11 @@ class Peer(NamedTuple):
                     peers.append(Peer(str(peer[0]), int(peer[1])))
             try:
                 with open(peerfile, "wb") as f:
-                    logger.info(f"saving {len(peers)} hostnames")
+                    logger.info(f"[p2p] saving {len(peers)} hostnames")
                     f.write(Utils.encode_socket_data(list(peers)))
             except Exception:
-                logger.exception('saving peers exception')
+                logger.exception(f'[p2p] saving peers exception')
+                return []
         else:
             try:
                 with open(peerfile, "rb") as f:
@@ -64,9 +65,9 @@ class Peer(NamedTuple):
                     gs['Peer'] = globals()['Peer']
                     peers = Utils.deserialize(f.read(msg_len), gs)
                     peers = list(set(peers))
-                    logger.info(f"loading peers with {len(peers)} hostnames")
+                    logger.info(f"[p2p] loading peers with {len(peers)} hostnames")
             except Exception:
-                logger.exception('loading peers exception')
+                logger.exception(f'[p2p] loading peers exception')
                 peers = []
         return peers
 
@@ -74,7 +75,7 @@ class Peer(NamedTuple):
     def save_peers(cls, peers: Iterable[object], peerfile = Params.PEERS_FILE):
         try:
             with open(peerfile, "wb") as f:
-                logger.info(f"saving {len(peers)} hostnames")
+                logger.info(f"[p2p] saving {len(peers)} hostnames")
                 f.write(Utils.encode_socket_data(list(peers)))
         except Exception:
-            logger.exception('saving peers exception')
+            logger.exception('[p2p] saving peers exception')

@@ -48,13 +48,13 @@ class Wallet(object):
 				signing_key = ecdsa.SigningKey.from_string(
 					f.read(), curve=ecdsa.SECP256k1)
 		else:
-			logger.info(f"generating new wallet: '{path}'")
+			logger.info(f"[wallet] generating new wallet: '{path}'")
 			signing_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
 			with open(path, 'wb') as f:
 				f.write(signing_key.to_string())
 
 		verifying_key = signing_key.get_verifying_key()
 		my_address = Wallet.pubkey_to_address(verifying_key.to_string())
-		logger.info(f"your address is {my_address}")
+		logger.info(f"[wallet] your address is {my_address}")
 
 		return cls(signing_key, verifying_key, my_address)

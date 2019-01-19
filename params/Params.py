@@ -60,7 +60,7 @@ class Params:
     # list of peers
     CHUNK_SIZE = int(50)
     PORT_CURRENT = int(9997)
-    PEERS_FILE =  'peers.conf'
+    PEERS_FILE =  'seeds.node'
     CHAIN_FILE = 'chain.dat'
     WALLET_FILE = 'wallet.dat'
     PEERS: Iterable[Tuple] = list([#('127.0.0.1', 2221),

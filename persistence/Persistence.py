@@ -40,7 +40,7 @@ from params.Params import Params
 
 def save_to_disk(active_chain: BlockChain, CHAIN_PATH=Params.CHAIN_FILE):
     with open(CHAIN_PATH, "wb") as f:
-        logger.info(f"saving chain with {len(active_chain.chain)} blocks")
+        logger.info(f"[persistence] saving chain with {len(active_chain.chain)} blocks")
         f.write(Utils.encode_chain_data(list(active_chain.chain)))
 
 
@@ -170,8 +170,9 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
                 if not _connect_block(block, active_chain, utxo_set):
                     logger.exception(f'[persistence] {active_chain.height+1} block connecting failed, load_from_disk stopped and return')
                     return
+            logger.info(f'[persistence] loading {len(new_blocks)} blocks successful')
     except Exception:
-        logger.exception('failded in loading from chain storage file')
+        logger.exception(f'[persistence] failded in loading from chain storage file')
         return
 
 
