@@ -94,20 +94,24 @@ class Utils(object):
 
     @classmethod
     def send_to_peer(cls, data, peer)->bool:
-        tries_left = Params.TRIES_MAXIMUM
+        tries_left = int(Params.TRIES_MAXIMUM)
+
+        if tries_left <= 0:
+            logger.exception(f'[utils] tries_left in send_to_peer must be larger than or equal to  1')
+            return False
 
         while tries_left > 0:
             try:
                 with socket.create_connection(peer(), timeout=1) as s:
                     s.sendall(cls.encode_socket_data(data))
             except Exception:
-                logger.exception(f'failed to send to {peer}  in {Params.TRIES_MAXIMUM+1-tries_left}th time')
+                logger.exception(f'[utils] failed to send to {peer} data in {Params.TRIES_MAXIMUM+1-tries_left}th time')
                 tries_left -= 1
                 time.sleep(2)
                 if tries_left <= 0:
                     return False
             else:
-                logger.info(f'succeed in sending to {peer} in {Params.TRIES_MAXIMUM+1-tries_left}th time')
+                logger.info(f'[utils] succeed in sending to {peer} data in {Params.TRIES_MAXIMUM+1-tries_left}th time')
                 return True
 
 

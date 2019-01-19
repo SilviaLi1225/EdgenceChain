@@ -148,25 +148,27 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
 
 
     if not os.path.isfile(CHAIN_PATH):
-        logger.info('chain storage file does not exist')
+        logger.info(f'[persistence] chain storage file does not exist')
         return
     else:
         if len(active_chain.chain) > 1:
-            logger.exception('more blocks exists when loading chain from disk')
+            logger.exception(f'[persistence] more than the genesis block exists, load_from_disk stopped and return')
             return
     try:
         with open(CHAIN_PATH, "rb") as f:
             block_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
+            logger.info(f'[persistence] {block_len} is claimed at the head of chain file')
             msg_len = int(binascii.hexlify(f.read(4) or b'\x00'), 16)
             gs = dict()
             gs['Block'], gs['Transaction'], gs['TxIn'], gs['TxOut'] = globals()['Block'], globals()['Transaction'], \
                                                                       globals()['TxIn'], globals()['TxOut']
 
             new_blocks = Utils.deserialize(f.read(msg_len), gs)
-            logger.info(f"loading chain from disk with {len(new_blocks)} blocks")
+            logger.info(f"[persistence] loading chain from disk with {len(new_blocks)} blocks")
 
             for block in new_blocks[1:]:
                 if not _connect_block(block, active_chain, utxo_set):
+                    logger.exception(f'[persistence] {active_chain.height+1} block connecting failed, load_from_disk stopped and return')
                     return
     except Exception:
         logger.exception('failded in loading from chain storage file')

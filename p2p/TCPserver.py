@@ -111,7 +111,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
         elif action == Actions.BlockRev:
             self.handleBlockRev(message.data, peer)
         else:
-            logger.exception('received unwanted action request ')
+            logger.exception(f'[p2p] received unwanted action request ')
 
 
 
@@ -120,7 +120,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
             chains = [chain] if chain else [self.active_chain, *self.side_branches]
 
             for chain_idx, chain in enumerate(chains):
-                for height, block in enumerate(chain.chain):
+                for height, block in enumerate(chain.chain, 1):
                     if block.id == block_hash:
                         return (block, height, chain_idx)
             return (None, None, None)
@@ -152,19 +152,26 @@ class TCPHandler(socketserver.BaseRequestHandler):
         return chain_idx
 
     def handleBlockSyncReq(self, blockid: str, peer: Peer):
-        logger.info(f"receive BlockSyncReq from {peer}")
-        height = self.locate_block(blockid, self.active_chain)[1] or 1
+        height = self.locate_block(blockid, self.active_chain)[1]
+        if height is None:
+            logger.info(f'[p2p] cannot find blockid {blockid}, and do nothing for this BlockSyncReq from peer {peer}')
+            return
+        else:
+            logger.info(f"[p2p] receive BlockSyncReq at height {height} from peer {peer}")
         with self.chain_lock:
             blocks = self.active_chain.chain[height:(height + Params.CHUNK_SIZE)]
 
-        logger.info(f"sending {len(blocks)} blocks to {peer}")
+        logger.info(f"[p2p] sending {len(blocks)} blocks to {peer}")
         if Utils.send_to_peer(Message(Actions.BlocksSyncGet, blocks, Params.PORT_CURRENT), peer):
             if peer not in self.peers:
                 self.peers.append(peer)
+                logger.info(f'[p2p] add peer {peer} into peer list')
+                Peer.save_peers(self.peers)
+
 
 
     def handleBlockSyncGet(self, blocks: Iterable[Block], peer: Peer):
-        logger.info(f"recieve BlockSyncGet with {len(blocks)} blocks from {peer}")
+        logger.info(f"[p2p] recieve BlockSyncGet with {len(blocks)} blocks from {peer}")
         new_blocks = [block for block in blocks if not self.locate_block(block.id)[0]]
 
         if not new_blocks:
@@ -185,11 +192,11 @@ class TCPHandler(socketserver.BaseRequestHandler):
                     else:
                         self.side_branches[chain_idx-1].chain.append(block)
                 else:
-                    logger.info(f'do nothing for block {block.id}')
+                    logger.info(f'[p2p] do nothing for block {block.id}')
 
 
             new_tip_id = self.active_chain.chain[-1].id
-        logger.info(f'continuing initial block download at {new_tip_id}')
+        logger.info(f'[p2p] current chain height {self.active_chain.height}, and continue initial block download ... ')
 
         Utils.send_to_peer(Message(Actions.BlocksSyncReq, new_tip_id, Params.PORT_CURRENT), peer)
 
@@ -197,18 +204,18 @@ class TCPHandler(socketserver.BaseRequestHandler):
         def _txn_iterator(chain):
             return (
                 (txn, block, height)
-                for height, block in enumerate(chain) for txn in block.txns)
+                for height, block in enumerate(chain, 1) for txn in block.txns)
         with self.chain_lock:
             if txid in self.mempool.mempool:
-                status = 'txid found in_mempool'
+                status = f'txn {txid} found in_mempool'
                 Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
                 return
             for tx, block, height in _txn_iterator(self.active_chain.chain):
                 if tx.id == txid:
-                    status = f'Mined in {block.id} at height {height}'
+                    status = f'txn {txid} is mined in block {block.id} at height {height}'
                     Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
                     return
-        status = f'{txid}:not_found'
+        status = f'txn {txid}:not_found'
         Utils.send_to_peer(Message(Actions.TxStatusRev, status, Params.PORT_CURRENT), peer)
 
     def handleUTXO4Addr(self, addr: str, peer: Peer):
@@ -225,9 +232,9 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
     def handleTxRev(self, txn: Transaction, peer: Peer):
         if isinstance(txn, Transaction):
+            logger.info(f"received txn {txn.id} from peer {peer}")
             with self.chain_lock:
                 if self.mempool.add_txn_to_mempool(txn, self.utxo_set):
-                    logger.info(f"received txn {txn.id} from peer {peer}")
                     for _peer in self.peers:
                         if _peer != peer:
                             Utils.send_to_peer(Message(Actions.TxRev, txn, Params.PORT_CURRENT), _peer)
@@ -244,6 +251,8 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
                     if peer not in self.peers:
                         self.peers.append(peer)
+                        logger.info(f'[p2p] add peer {peer} into peer list')
+                        Peer.save_peers(self.peers)
 
                     if chain_idx == Params.ACTIVE_CHAIN_IDX:
                         self.active_chain.connect_block(block, self.active_chain, self.side_branches, \

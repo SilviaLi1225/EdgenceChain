@@ -174,22 +174,19 @@ class EdgenceChain(object):
 
             return chain_idx
 
-    def initial_block_download(self) -> bool:
-
+    def initial_block_download(self):
+        self.ibd_done.clear()
         if self.peers:
             logger.info(f'start initial block download from {len(self.peers)} peers')
             peer_sample = random.sample(self.peers, len(self.peers))
             for peer in peer_sample:
-                if Utils.send_to_peer(Message(Actions.BlocksSyncReq, self.active_chain.chain[-1].id, \
+                if not Utils.send_to_peer(Message(Actions.BlocksSyncReq, self.active_chain.chain[-1].id, \
                                               Params.PORT_CURRENT), peer):
-                    return True
-                else:
                     self.peers.remove(peer)
-            self.ibd_done.set()
-            return False
+                    Peer.save_peers(self.peers)
+                    logger.info(f'remove dead peer {peer}')
         else:
             self.ibd_done.set()
-            return False
 
 
 
@@ -220,9 +217,8 @@ class EdgenceChain(object):
                             for _peer in self.peers:
                                 Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
 
-        with self.chain_lock:
-            Persistence.load_from_disk(self.active_chain, self.utxo_set)
-
+        # single thread mode, no need for thread lock
+        Persistence.load_from_disk(self.active_chain, self.utxo_set)
 
         workers = []
 
@@ -233,10 +229,10 @@ class EdgenceChain(object):
 
 
         self.initial_block_download()
-        self.ibd_done.clear()
         old_height = self.active_chain.height
         new_height = old_height + 1
-        while new_height > old_height:
+        while new_height > old_height and not self.ibd_done.is_set():
+            logger.info(f'{new_height-old_height} more blocks got this time, waiting for blocks syncing ...')
             old_height = new_height
             wait_times = 3
             while not self.ibd_done.is_set():

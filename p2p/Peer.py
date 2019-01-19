@@ -62,4 +62,11 @@ class Peer(NamedTuple):
                 peers = []
         return peers
 
-
+    @classmethod
+    def save_peers(cls, peers: Iterable[object], peerfile = Params.Params.PEERS_FILE):
+        try:
+            with open(peerfile, "wb") as f:
+                logger.info(f"saving {len(peers)} hostnames")
+                f.write(Utils.encode_socket_data(list(peers)))
+        except Exception:
+            logger.exception('saving peers exception')
