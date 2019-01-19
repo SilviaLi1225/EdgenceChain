@@ -65,5 +65,6 @@ class Params:
     WALLET_FILE = 'wallet.dat'
     PEERS: Iterable[Tuple] = list([#('127.0.0.1', 2221),
                       #('127.0.0.1', 99),
-                      ('localhost', 9999)])
+                      #('localhost', 9999)
+                     ])
 
