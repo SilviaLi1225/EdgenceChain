@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 >>> peer.get()
 ('10.108.01.13', 18)
 """
-from params import Params
+from params.Params import Params
 from utils.Utils import Utils
 
 class Peer(NamedTuple):
@@ -31,18 +31,25 @@ class Peer(NamedTuple):
         return str(self.ip), int(self.port)
 
     def __eq__(self, other):
-        return self.ip == other.ip and self.port == other.port
+        return isinstance(self, type(other)) and self.ip == other.ip and self.port == other.port
+
+    def  __hash__(self):
+        return hash(f'{self.ip}{self.port}')
 
     @property
     def id(self):
         return Utils.sha256d(Utils.serialize(self))
 
     @classmethod
-    def init_peers(cls, peerfile = Params.Params.PEERS_FILE)->Iterable[NamedTuple]:
+    def init_peers(cls, peerfile = Params.PEERS_FILE)->Iterable[NamedTuple]:
         if not os.path.exists(peerfile):
             peers: Iterable[Peer] =[]
-            for peer in Params.Params.PEERS:
-                peers.append(Peer(*peer))
+            for peer in Params.PEERS:
+                if (str(peer[0]) == '127.0.0.1' and int(peer[1]) == Params.PORT_CURRENT) or \
+                    (str(peer[0]) == 'localhost' and int(peer[1]) == Params.PORT_CURRENT):
+                    pass
+                else:
+                    peers.append(Peer(str(peer[0]), int(peer[1])))
             try:
                 with open(peerfile, "wb") as f:
                     logger.info(f"saving {len(peers)} hostnames")
@@ -56,6 +63,7 @@ class Peer(NamedTuple):
                     gs = dict()
                     gs['Peer'] = globals()['Peer']
                     peers = Utils.deserialize(f.read(msg_len), gs)
+                    peers = list(set(peers))
                     logger.info(f"loading peers with {len(peers)} hostnames")
             except Exception:
                 logger.exception('loading peers exception')
@@ -63,7 +71,7 @@ class Peer(NamedTuple):
         return peers
 
     @classmethod
-    def save_peers(cls, peers: Iterable[object], peerfile = Params.Params.PEERS_FILE):
+    def save_peers(cls, peers: Iterable[object], peerfile = Params.PEERS_FILE):
         try:
             with open(peerfile, "wb") as f:
                 logger.info(f"saving {len(peers)} hostnames")

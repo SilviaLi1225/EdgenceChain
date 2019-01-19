@@ -93,7 +93,14 @@ class TCPHandler(socketserver.BaseRequestHandler):
             logger.exception(f'Not a Message from peer {self.request.getpeername()[0]}')
             return
         else:
-            peer = Peer(self.request.getpeername()[0], int(message.port))
+            peer = Peer(str(self.request.getpeername()[0]), int(message.port))
+            if (peer.ip == '127.0.0.1' and peer.port == Params.PORT_CURRENT) or \
+                (peer.ip == 'localhost' and peer.port == Params.PORT_CURRENT):
+                logger.exception(f'new found {peer} is the current node itself, and does nothing for it')
+                return
+
+
+
 
         action = int(message.action)
         if action == Actions.BlocksSyncReq:
