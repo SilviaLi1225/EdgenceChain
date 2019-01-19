@@ -116,7 +116,7 @@ class BlockChain(object):
                 return True
 
             def _locate_block(block_hash: str, chain: BlockChain) -> (Block, int):
-                for height, block in enumerate(chain.chain):
+                for height, block in enumerate(chain.chain, 1):
                     if block.id == block_hash:
                         return (block, height)
                 return (None, None)
@@ -127,16 +127,16 @@ class BlockChain(object):
 
             # TODO should probably be using `chainwork` for the basis of comparison here.
             for branch_idx, blockchain in enumerate(frozen_side_branches, 1):
-                fork_block, fork_idx = _locate_block(
+                fork_block, fork_height = _locate_block(
                     blockchain.chain[0].prev_block_hash, active_chain)
                 active_height = active_chain.height
-                branch_height = blockchain.height + fork_idx
+                branch_height = blockchain.height + fork_height
 
                 if branch_height > active_height:
                     logger.info(
                         f'[ds] attempting reorg of idx {branch_idx} to active_chain: '
                         f'new height of {branch_height} (vs. {active_height})')
-                    reorged |= _try_reorg(blockchain, branch_idx, fork_idx, active_chain, side_branches, mempool, \
+                    reorged |= _try_reorg(blockchain, branch_idx, fork_height, active_chain, side_branches, mempool, \
                                          utxo_set, mine_interrupt, peers)
 
             return reorged

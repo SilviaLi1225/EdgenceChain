@@ -56,13 +56,13 @@ def load_from_disk(active_chain: BlockChain, utxo_set: UTXO_Set, CHAIN_PATH=Para
                 if not prev_block_hash:
                     return Params.INITIAL_DIFFICULTY_BITS
 
-                prev_block, prev_height = active_chain.chain[-1], len(active_chain.chain)
+                prev_block, prev_height = active_chain.chain[-1], active_chain.height
 
-                if (prev_height + 1) % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
+                if prev_height % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
                     return prev_block.bits
 
-                period_start_block = active_chain[max(
-                        prev_height - (Params.DIFFICULTY_PERIOD_IN_BLOCKS - 1), 0)]
+                period_start_block = active_chain.chain[max(
+                        prev_height - Params.DIFFICULTY_PERIOD_IN_BLOCKS, 0)]
 
                 actual_time_taken = prev_block.timestamp - period_start_block.timestamp
 

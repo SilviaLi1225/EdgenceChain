@@ -159,13 +159,13 @@ class TCPHandler(socketserver.BaseRequestHandler):
         return chain_idx
 
     def handleBlockSyncReq(self, blockid: str, peer: Peer):
-        height = self.locate_block(blockid, self.active_chain)[1]
-        if height is None:
-            logger.info(f'[p2p] cannot find blockid {blockid}, and do nothing for this BlockSyncReq from peer {peer}')
-            return
-        else:
-            logger.info(f"[p2p] receive BlockSyncReq at height {height} from peer {peer}")
         with self.chain_lock:
+            height = self.locate_block(blockid, self.active_chain)[1]
+            if height is None:
+                logger.info(f'[p2p] cannot find blockid {blockid}, and do nothing for this BlockSyncReq from peer {peer}')
+                return
+            else:
+                logger.info(f"[p2p] receive BlockSyncReq at height {height} from peer {peer}")
             blocks = self.active_chain.chain[height:(height + Params.CHUNK_SIZE)]
 
         logger.info(f"[p2p] sending {len(blocks)} blocks to {peer}")
@@ -190,7 +190,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
             for block in new_blocks:
                 chain_idx  = self.check_block_place(block)
 
-                if chain_idx >= 0:
+                if chain_idx is not None and chain_idx >= 0:
                     if chain_idx == Params.ACTIVE_CHAIN_IDX:
                         if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
                                                         self.mempool, \
@@ -258,7 +258,7 @@ class TCPHandler(socketserver.BaseRequestHandler):
             logger.info(f"[p2p] received block {block.id} from peer {peer}")
             with self.chain_lock:
                 chain_idx  = self.check_block_place(block)
-                if chain_idx >= 0:
+                if chain_idx is not None and chain_idx >= 0:
 
                     if peer not in self.peers:
                         self.peers.append(peer)

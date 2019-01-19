@@ -113,7 +113,7 @@ class Block(NamedTuple):
 
                 for _, blockchain in enumerate(blockchains):
                     chain_idx = blockchain.idx
-                    for height, block in enumerate(blockchain.chain):
+                    for height, block in enumerate(blockchain.chain, 1):
                         if block.id == block_hash:
                             return (block, height, chain_idx)
                 return (None, None, None)
@@ -128,12 +128,12 @@ class Block(NamedTuple):
 
                 (prev_block, prev_height, _) = _locate_block(self.prev_block_hash)
 
-                if (prev_height + 1) % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
+                if prev_height % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
                     return prev_block.bits
 
                 with chain_lock:
-                    period_start_block = active_chain[max(
-                        prev_height - (Params.DIFFICULTY_PERIOD_IN_BLOCKS - 1), 0)]
+                    period_start_block = active_chain.chain[max(
+                        prev_height - Params.DIFFICULTY_PERIOD_IN_BLOCKS, 0)]
 
                 actual_time_taken = prev_block.timestamp - period_start_block.timestamp
 

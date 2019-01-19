@@ -76,7 +76,7 @@ class EdgenceChain(object):
             chains = [chain] if chain else [self.active_chain, *self.side_branches]
 
             for chain_idx, chain in enumerate(chains):
-                for height, block in enumerate(chain.chain):
+                for height, block in enumerate(chain.chain, 1):
                     if block.id == block_hash:
                         return (block, height, chain_idx)
             return (None, None, None)
@@ -91,15 +91,18 @@ class EdgenceChain(object):
         if not prev_block_hash:
             return Params.INITIAL_DIFFICULTY_BITS
 
-        (prev_block, prev_height, _) = self.locate_block(prev_block_hash)
+        (prev_block, prev_height, pre_chain_idx) = self.locate_block(prev_block_hash)
 
-        if (prev_height + 1) % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
+        if pre_chain_idx != 0:
+            return None
+
+        if prev_height % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
             return prev_block.bits
 
         with self.chain_lock:
             # #realname CalculateNextWorkRequired
-            period_start_block = self.active_chain[max(
-                prev_height - (Params.DIFFICULTY_PERIOD_IN_BLOCKS - 1), 0)]
+            period_start_block = self.active_chain.chain[max(
+                prev_height - Params.DIFFICULTY_PERIOD_IN_BLOCKS, 0)]
 
         actual_time_taken = prev_block.timestamp - period_start_block.timestamp
 
@@ -128,6 +131,9 @@ class EdgenceChain(object):
             nonce=0,
             txns=txns or [],
         )
+
+        if block.bits is None:
+            return None
 
         if not block.txns:
             block = self.mempool.select_from_mempool(block, self.utxo_set)
@@ -229,9 +235,8 @@ class EdgenceChain(object):
 
         self.initial_block_download()
         old_height = self.active_chain.height
-        new_height = old_height + 1
+        new_height = old_height
         while new_height > old_height:
-            logger.info(f'{new_height-old_height} more blocks got this time, waiting for blocks syncing ...')
             old_height = new_height
             wait_times = 3
             while not self.ibd_done.is_set():
@@ -240,6 +245,7 @@ class EdgenceChain(object):
                 if wait_times <= 0:
                     break
             new_height = self.active_chain.height
+            logger.info(f'{new_height-old_height} more blocks got this time, waiting for blocks syncing ...')
         self.ibd_done.set()
 
 
