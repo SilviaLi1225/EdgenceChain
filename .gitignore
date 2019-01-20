@@ -1,5 +1,10 @@
 .idea/
 Client/
 __pycache__/
-
-*.pyc
+ds/__pycache__/
+consensus/__pycache__/
+p2p/__pycache__/
+params/__pycache__/
+persistence__pycache__/
+utils/__pycache__/
+wallet/__pycache__/

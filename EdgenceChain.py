@@ -149,7 +149,6 @@ class EdgenceChain(object):
                             TCPHandler.do_connect_block_and_after(block, chain_idx, self.active_chain, \
                                                                   self.side_branches, self.mempool, \
                                                            self.utxo_set, self.mine_interrupt, self.peers)
-
                         elif chain_idx is None:
                             logger.info(f'mined already seen block {block.id}, just discard it and go')
                         elif chain_idx == -2:

@@ -238,8 +238,29 @@ class TCPHandler(socketserver.BaseRequestHandler):
             connect_block_success =  side_branches[chain_idx-1].connect_block(block, \
                                              active_chain, side_branches, \
                                     mempool, utxo_set, mine_interrupt, peers)
-        if connect_block_success is True:
+
+        if connect_block_success is not False:
             Persistence.save_to_disk(active_chain)
+
+            if connect_block_success is not True: # -1
+                logger.info(f'[p2p] a successful reorg is found, begin to deal with {len(side_branches)} side branches')
+                for branch_chain in side_branches:
+                    fork_height_from_end = 0
+                    for block in branch_chain.chain[::-1]:
+                        if not Block.locate_block(block.id, active_chain):
+                            if not Block.locate_block(block.prev_block_hash, active_chain):
+                                fork_height_from_end += 1
+                            else:
+                                break
+                        else:
+                            branch_chain.chain = []
+                    if fork_height_from_end >= branch_chain.height:
+                        branch_chain.chain = []
+                    else:
+                        for num_to_pop in range(1, branch_chain.height-fork_height_from_end):
+                            branch_chain.chain.pop(0)
+
+
             side_branches_to_discard = []
             for branch_chain in side_branches:
                 fork_block, fork_height, _ = Block.locate_block(branch_chain.chain[0].prev_block_hash,
@@ -247,10 +268,14 @@ class TCPHandler(socketserver.BaseRequestHandler):
                 branch_height_real = branch_chain.height + fork_height
                 if active_chain.height - branch_height_real > Params.MAXIMUM_ALLOWABLE_HEIGHT_DIFF:
                     side_branches_to_discard.append(branch_chain)
-            for branch_chain in side_branches_to_discard:
-                side_branches.remove(branch_chain)
+            if len(side_branches_to_discard) > 0:
+                logger.info(f'[p2p] delete {len(side_branches_to_discard)} of side branches')
+                for branch_chain in side_branches_to_discard:
+                    side_branches.remove(branch_chain)
             for index, branch_chain in enumerate(side_branches, 1):
                 branch_chain.index = index
+        else:
+            logger.exception(f'[p2p] connect_block returned a False value')
 
     @classmethod
     def check_block_place(cls, block: Block, active_chain: BlockChain, side_branches: Iterable[BlockChain], \
