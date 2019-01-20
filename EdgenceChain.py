@@ -70,51 +70,6 @@ class EdgenceChain(object):
 
 
 
-
-    def locate_block(self, block_hash: str, chain: BlockChain=None) -> (Block, int, int):
-        with self.chain_lock:
-            chains = [chain] if chain else [self.active_chain, *self.side_branches]
-
-            for chain_idx, chain in enumerate(chains):
-                for height, block in enumerate(chain.chain, 1):
-                    if block.id == block_hash:
-                        return (block, height, chain_idx)
-            return (None, None, None)
-
-    # Proof of work
-    def get_next_work_required(self, prev_block_hash: str) -> int:
-
-        """
-        Based on the chain, return the number of difficulty bits the next block
-        must solve.
-        """
-        if not prev_block_hash:
-            return Params.INITIAL_DIFFICULTY_BITS
-
-        (prev_block, prev_height, pre_chain_idx) = self.locate_block(prev_block_hash)
-
-        if pre_chain_idx != 0:
-            return None
-
-        if prev_height % Params.DIFFICULTY_PERIOD_IN_BLOCKS != 0:
-            return prev_block.bits
-
-        with self.chain_lock:
-            # #realname CalculateNextWorkRequired
-            period_start_block = self.active_chain.chain[max(
-                prev_height - Params.DIFFICULTY_PERIOD_IN_BLOCKS, 0)]
-
-        actual_time_taken = prev_block.timestamp - period_start_block.timestamp
-
-        if actual_time_taken < Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
-            # Increase the difficulty
-            return prev_block.bits + 1
-        elif actual_time_taken > Params.DIFFICULTY_PERIOD_IN_SECS_TARGET:
-            return prev_block.bits - 1
-        else:
-            # Wow, that's unlikely.
-            return prev_block.bits
-
     def assemble_and_solve_block(self, txns=None)->Block:
         """
         Construct a Block by pulling transactions from the mempool, then mine it.
@@ -127,7 +82,7 @@ class EdgenceChain(object):
             prev_block_hash=prev_block_hash,
             merkle_hash='',
             timestamp=int(time.time()),
-            bits=self.get_next_work_required(prev_block_hash),
+            bits= Block.get_next_work_required(prev_block_hash, self.active_chain, self.side_branches),
             nonce=0,
             txns=txns or [],
         )
@@ -154,30 +109,7 @@ class EdgenceChain(object):
 
         return block
 
-    def check_block_place(self, block: Block) -> int:
 
-        with self.chain_lock:
-            if self.locate_block(block.id)[0]:
-                logger.debug(f'mined block {block.id} but already seen, impossible')
-                return None
-
-            try:
-                chain_idx = block.validate_block(self.active_chain, self.side_branches, self.chain_lock)
-            except BlockValidationError as e:
-                logger.exception('a mined block %s but failed validation', block.id)
-                if e.to_orphan:
-                    logger.info(f"mined an orphan block {block.id}, just discard it and go")
-                return None
-
-            # If `validate_block()` returned a non-existent chain index, we're
-            # creating a new side branch.
-            if chain_idx != Params.ACTIVE_CHAIN_IDX and len(self.side_branches) < chain_idx:
-                logger.info(
-                    f'creating a new side branch (idx={chain_idx}) '
-                    f'for block {block.id}')
-                self.side_branches.append(BlockChain(idx = chain_idx, chain = []))
-
-            return chain_idx
 
     def initial_block_download(self):
         self.ibd_done.clear()
@@ -204,23 +136,30 @@ class EdgenceChain(object):
         def mine_forever():
             logger.info(f'thread for mining is started....')
             while True:
-                block = self.assemble_and_solve_block()
+                with self.chain_lock:
+                    block = self.assemble_and_solve_block()
 
                 if block:
+                    for _peer in self.peers:
+                        Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
                     with self.chain_lock:
-                        chain_idx  = self.check_block_place(block)
+                        chain_idx  = TCPHandler.check_block_place(block, self.active_chain, self.side_branches, self.chain_lock)
 
-                        if chain_idx is not None:
-                            if chain_idx == Params.ACTIVE_CHAIN_IDX:
-                                if self.active_chain.connect_block(block, self.active_chain, self.side_branches, \
-                                                        self.mempool, self.utxo_set, self.mine_interrupt, self.peers):
-                                    with self.chain_lock:
-                                        Persistence.save_to_disk(self.active_chain)
-                            else:
-                                self.side_branches[chain_idx-1].chain.append(block)
+                        if chain_idx is not None and chain_idx >= 0:
+                            TCPHandler.do_connect_block_and_after(block, chain_idx, self.active_chain, \
+                                                                  self.side_branches, self.mempool, \
+                                                           self.utxo_set, self.mine_interrupt, self.peers)
 
-                            for _peer in self.peers:
-                                Utils.send_to_peer(Message(Actions.BlockRev, block, Params.PORT_CURRENT), _peer)
+                        elif chain_idx is None:
+                            logger.info(f'mined already seen block {block.id}, just discard it and go')
+                        elif chain_idx == -2:
+                            logger.info(f"mined an orphan block {block.id}, just discard it and go")
+                        elif chain_idx == -1:
+                            logger.exception(f'a mined block {block.id} but failed validation')
+                        else:
+                            logger.exception(f'unwanted result of check block place')
+
+
 
         # single thread mode, no need for thread lock
         Persistence.load_from_disk(self.active_chain, self.utxo_set)
