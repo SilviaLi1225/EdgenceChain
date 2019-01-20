@@ -1,3 +1,5 @@
 .idea/
 Client/
 __pycache__/
+
+*.pyc
