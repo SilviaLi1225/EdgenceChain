@@ -207,8 +207,19 @@ class Block(NamedTuple):
             raise BlockValidationError('timestamp too old')
 
         #
-        if not self.prev_block_hash and active_chain.height == 1:
-            prev_block_chain_idx = Params.ACTIVE_CHAIN_IDX
+        if not self.prev_block_hash and active_chain.height == 1 and self.id == active_chain.chain[0].id:
+            # this block is the genesis block
+            if self.bits != Params.INITIAL_DIFFICULTY_BITS:
+                raise BlockValidationError(f'bits of genesis block is incorrect, so the node cannot be builded successfully')
+
+            try:
+                self.txns[0].validate_txn(
+                             allow_utxo_from_mempool=False)
+            except TxnValidationError:
+                msg = f"[ds] coinbase transaction {txn} in genesis block failed to validate"
+                logger.exception(msg)
+                raise BlockValidationError(msg)
+            return Params.ACTIVE_CHAIN_IDX
         else:
             prev_block, prev_block_height, prev_block_chain_idx = Block.locate_block(
                 self.prev_block_hash, active_chain, side_branches)
@@ -217,6 +228,7 @@ class Block(NamedTuple):
                 raise BlockValidationError(
                     f'prev block {self.prev_block_hash} not found in any chain',
                     to_orphan=self)
+
 
             # No more validation for a block getting attached to a branch.
             if prev_block_chain_idx != Params.ACTIVE_CHAIN_IDX:
@@ -231,15 +243,20 @@ class Block(NamedTuple):
 
         for txn in self.txns[1:]:
             try:
-                txn.validate_txn(siblings_in_block=self.txns[1:],
+                txn.validate_txn(
                              allow_utxo_from_mempool=False)
             except TxnValidationError:
                 msg = f"[ds] {txn} failed to validate"
                 logger.exception(msg)
                 raise BlockValidationError(msg)
 
+        if active_chain.height == 1:
+            # the current block is the second block of active chain to be validated
+            logger.info(f'[ds] begin to validate the genesis block')
+            return active_chain.chain[0].validate_block(active_chain)
 
-        return prev_block_chain_idx
+
+        return Params.ACTIVE_CHAIN_IDX
 
 
 
