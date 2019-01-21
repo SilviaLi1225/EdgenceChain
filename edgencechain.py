@@ -932,8 +932,23 @@ def get_merkle_root(*leaves: Tuple[str]) -> MerkleNode:
 
 # Peer-to-peer
 # ----------------------------------------------------------------------------
+# Peer class with initial IP and port
+class Peer(NamedTuple):
+    ip: str = 'localhost'
+    port: int = 9999
 
-peer_hostnames = {p for p in os.environ.get('TC_PEERS', '').split(',') if p}
+    def __call__(self):
+        return str(self.ip),int(self.port)
+
+# Initialize peers for test
+peer0 = Peer()
+peer1 = Peer('localhost', 18)
+peer2 = Peer('localhost', 33323)
+
+# print(peer0.ip)
+
+#put peer into set peer_hostnames
+peer_hostnames = {peer0, peer2}
 
 # Signal when the initial block download has completed.
 ibd_done = threading.Event()
@@ -1031,7 +1046,7 @@ def send_to_peer(data, peer=None):
 
     while tries_left > 0:
         try:
-            with socket.create_connection((peer, PORT), timeout=1) as s:
+            with socket.create_connection((peer.ip, peer.port), timeout=1) as s:
                 s.sendall(encode_socket_data(data))
         except Exception:
             logger.exception(f'failed to send to peer {peer}')
@@ -1215,7 +1230,7 @@ def main():
 
     if peer_hostnames:
         logger.info(
-            f'start initial block download from {len(peer_hostnames)} peers')
+            f'start initial block download from {len(peer_hostnames)}{peer_hostnames} peers')
         send_to_peer(GetBlocksMsg(active_chain[-1].id))
         ibd_done.wait(60.)  # Wait a maximum of 60 seconds for IBD to complete.
 
