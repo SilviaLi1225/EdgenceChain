@@ -231,11 +231,11 @@ class TCPHandler(socketserver.BaseRequestHandler):
                                 mempool: MemPool, utxo_set:UTXO_Set, mine_interrupt: threading.Event, \
                                 peers: Iterable[Peer]):
         if chain_idx == Params.ACTIVE_CHAIN_IDX:
-            connect_block_success =  active_chain.connect_block(block, active_chain, \
+            connect_block_success = active_chain.connect_block(block, active_chain, \
                                                     side_branches, \
                                     mempool, utxo_set, mine_interrupt, peers)
         else:
-            connect_block_success =  side_branches[chain_idx-1].connect_block(block, \
+            connect_block_success = side_branches[chain_idx-1].connect_block(block, \
                                              active_chain, side_branches, \
                                     mempool, utxo_set, mine_interrupt, peers)
 
@@ -287,11 +287,11 @@ class TCPHandler(socketserver.BaseRequestHandler):
         try:
             chain_idx = block.validate_block(active_chain, side_branches, chain_lock)
         except BlockValidationError as e:
-            logger.exception('block %s failed validation', block.id)
             if e.to_orphan:
-                logger.info(f"[p2p] saw orphan block {block.id}")
+                logger.info(f"[p2p]  block {block.id} failed validation as an orphan block")
                 return -1  # orphan block
             else:
+                logger.exception(f'[p2p] block {block.id} failed validation due to internal error in this block')
                 return -2  # Internal error in this block
 
         with chain_lock:

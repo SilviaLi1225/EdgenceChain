@@ -206,8 +206,8 @@ class Block(NamedTuple):
         if self.timestamp <= _get_median_time_past(11):
             raise BlockValidationError('timestamp too old')
 
-        if not self.prev_block_hash and not active_chain:
-            # This is the genesis block.
+        #
+        if not self.prev_block_hash and active_chain.height == 1:
             prev_block_chain_idx = Params.ACTIVE_CHAIN_IDX
         else:
             prev_block, prev_block_height, prev_block_chain_idx = Block.locate_block(

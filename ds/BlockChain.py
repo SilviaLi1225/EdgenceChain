@@ -141,6 +141,8 @@ def connect_block(self, block: Block, active_chain: object, side_branches: Itera
     self.chain.append(block)
     # If we added to the active chain, perform upkeep on utxo_set and mempool.
     if self.idx == Params.ACTIVE_CHAIN_IDX:
+
+
         for tx in block.txns:
             mempool.mempool.pop(tx.id, None)
 
