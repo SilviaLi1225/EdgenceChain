@@ -72,7 +72,7 @@ class Peer(NamedTuple):
         return peers
 
     @classmethod
-    def save_peers(cls, peers: Iterable[object], peerfile = Params.PEERS_FILE):
+    def save_peers(cls, peers: Iterable[NamedTuple], peerfile = Params.PEERS_FILE):
         try:
             with open(peerfile, "wb") as f:
                 logger.info(f"[p2p] saving {len(peers)} hostnames")

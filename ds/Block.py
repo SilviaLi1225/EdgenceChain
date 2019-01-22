@@ -26,7 +26,7 @@ from ds.TxIn import TxIn
 from ds.TxOut import TxOut
 from params.Params import Params
 import _thread
-
+from ds.BaseBlockChain import BaseBlockChain
 
 
 import ecdsa
@@ -80,7 +80,7 @@ class Block(NamedTuple):
         )
 
     @classmethod
-    def get_block_subsidy(cls, active_chain: object) -> int:
+    def get_block_subsidy(cls, active_chain: BaseBlockChain) -> int:
         halvings = active_chain.height// Params.HALVE_SUBSIDY_AFTER_BLOCKS_NUM
 
         if halvings >= 64: return 0
@@ -101,7 +101,8 @@ class Block(NamedTuple):
 
 
     @classmethod
-    def get_next_work_required(cls, prev_block_hash: str, active_chain: object, \
+
+    def get_next_work_required(cls, prev_block_hash: str, active_chain: BaseBlockChain, \
                                side_branches: Iterable[object] = None) -> int:
 
         """
@@ -169,7 +170,7 @@ class Block(NamedTuple):
 
 
 
-    def validate_block(self, active_chain: object, side_branches: Iterable[object] = None) -> int:
+    def validate_block(self, active_chain: BaseBlockChain, side_branches: Iterable[BaseBlockChain] = None) -> int:
 
         def _get_median_time_past(num_last_blocks: int) -> int:
             """Grep for: GetMedianTimePast."""

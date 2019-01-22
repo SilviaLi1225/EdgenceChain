@@ -14,6 +14,7 @@ from params.Params import Params
 from utils.Utils import Utils
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from p2p.Peer import Peer
+from ds.BaseMemPool import BaseMemPool
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -21,7 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class MemPool(object):
+class MemPool(BaseMemPool):
     def __init__(self):
         self.mempool: Dict[str, Transaction] = {}
         # Set of orphaned (i.e. has inputs referencing yet non-existent UTXOs)
