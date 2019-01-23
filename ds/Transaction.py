@@ -10,7 +10,7 @@ from utils.Utils import Utils
 from params.Params import Params
 from wallet.Wallet import Wallet
 from ds.UnspentTxOut import UnspentTxOut
-from ds.UTXO_Set import UTXO_Set
+from ds.BaseUTXO_Set import BaseUTXO_Set
 from ds.TxIn import TxIn
 from ds.TxOut import TxOut
 from ds.BaseMemPool import BaseMemPool
@@ -62,8 +62,12 @@ class Transaction(NamedTuple):
         return Utils.sha256d(Utils.serialize(self))
 
     def validate_basics(self, as_coinbase=False):
-        if (not self.txouts) or (not self.txins and not as_coinbase):
+        if not self.txouts or self.txins:
             raise TxnValidationError('Missing txouts or txins')
+        if as_coinbase and len(self.txins)>1:
+            raise TxnValidationError('Coinbase transaction has more than one TxIns')
+        if as_coinbase and self.txins[0].to_spend is not None:
+            raise TxnValidationError('Coinbase transaction should not have valid to_spend in txins')
 
         if len(Utils.serialize(self)) > Params.MAX_BLOCK_SERIALIZED_SIZE:
             raise TxnValidationError('Too large')
@@ -73,8 +77,8 @@ class Transaction(NamedTuple):
 
 
     def validate_txn(self,
-                     utxo_set: UTXO_Set,
-                     mempool: BaseMemPool,
+                     utxo_set: BaseUTXO_Set,
+                     mempool: BaseMemPool = None,
                      as_coinbase: bool = False,
                      siblings_in_block: Iterable[NamedTuple] = None,  #object
                      allow_utxo_from_mempool: bool = True,
@@ -121,10 +125,11 @@ class Transaction(NamedTuple):
 
         available_to_spend = 0
 
-        for i, txin in enumerate(self.txins):
+        for idx, txin in enumerate(self.txins):
             utxo = utxo_set.get().get(txin.to_spend)
 
             if siblings_in_block:
+                from ds.UTXO_Set import UTXO_Set
                 utxo = utxo or UTXO_Set.find_utxo_in_list(txin, siblings_in_block)
 
             if allow_utxo_from_mempool:
@@ -132,7 +137,7 @@ class Transaction(NamedTuple):
 
             if not utxo:
                 raise TxnValidationError(
-                    f'Could find no UTXO for TxIn[{i}] -- orphaning txn',
+                    f'Could find no UTXO for TxIn [{idx}] for txn: {self.id}',
                     to_orphan=self)
 
             if utxo.is_coinbase and \

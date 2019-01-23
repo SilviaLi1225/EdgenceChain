@@ -17,8 +17,12 @@ from typing import (
 from ds.UnspentTxOut import UnspentTxOut
 from ds.OutPoint import OutPoint
 from ds.Transaction import Transaction
-from ds.UTXO_Set import UTXO_Set
-from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
+from ds.BaseUTXO_Set import BaseUTXO_Set
+from ds.BaseMemPool import BaseMemPool
+
+from utils.Errors import BlockValidationError
+from utils.Errors import TxnValidationError
+
 from utils.Utils import Utils
 from params.Params import Params
 from ds.MerkleNode import MerkleNode
@@ -61,6 +65,12 @@ class Block(NamedTuple):
     def id(self) -> str: 
         return Utils.sha256d(self.header())
 
+    @property
+    def block_subsidy_fees(self):
+        coinbase_txn: Transaction = self.txns[0]
+        subsidy_fees = sum(txout.value for txout in coinbase_txn.txouts)
+        return subsidy_fees
+
     @classmethod
     def genesis_block(cls):
         return cls(
@@ -78,6 +88,7 @@ class Block(NamedTuple):
                 txouts=[TxOut(
                     value=5000000000, to_address='0000000000000000000000000000000000')], locktime=None)]
         )
+
 
     @classmethod
     def get_block_subsidy(cls, active_chain: BaseBlockChain) -> int:
@@ -150,7 +161,7 @@ class Block(NamedTuple):
 
 
 
-    def calculate_fees(self, utxo_set: UTXO_Set) -> int:
+    def calculate_fees(self, utxo_set: BaseUTXO_Set) -> int:
 
         fee = 0
 
@@ -170,7 +181,8 @@ class Block(NamedTuple):
 
 
 
-    def validate_block(self, active_chain: BaseBlockChain, side_branches: Iterable[BaseBlockChain] = None) -> int:
+    def validate_block(self, active_chain: BaseBlockChain, utxo_set: BaseUTXO_Set = None, mempool: BaseMemPool = None,
+                       side_branches: Iterable[BaseBlockChain] = None) -> int:
 
         def _get_median_time_past(num_last_blocks: int) -> int:
             """Grep for: GetMedianTimePast."""
@@ -214,8 +226,7 @@ class Block(NamedTuple):
                 raise BlockValidationError(f'bits of genesis block is incorrect, so the node cannot be builded successfully')
 
             try:
-                self.txns[0].validate_txn(
-                             allow_utxo_from_mempool=False)
+                self.txns[0].validate_txn(utxo_set, allow_utxo_from_mempool=False)
             except TxnValidationError:
                 msg = f"[ds] coinbase transaction {txn} in genesis block failed to validate"
                 logger.exception(msg)
@@ -244,8 +255,7 @@ class Block(NamedTuple):
 
         for txn in self.txns[1:]:
             try:
-                txn.validate_txn(
-                             allow_utxo_from_mempool=False)
+                txn.validate_txn(utxo_set, mempool, siblings_in_block=self.txns[1:], allow_utxo_from_mempool=False)
             except TxnValidationError:
                 msg = f"[ds] {txn} failed to validate"
                 logger.exception(msg)

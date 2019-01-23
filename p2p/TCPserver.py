@@ -23,8 +23,8 @@ from params.Params import Params
 from p2p.Message import Message
 
 from p2p.Peer import Peer
-from ds.UTXO_Set import UTXO_Set
-from ds.MemPool import MemPool
+from ds.BaseUTXO_Set import BaseUTXO_Set
+from ds.BaseMemPool import BaseMemPool
 from ds.BlockChain import BlockChain
 from ds.TxIn import TxIn
 from ds.TxOut import TxOut
@@ -150,7 +150,8 @@ class TCPHandler(socketserver.BaseRequestHandler):
 
         with self.chain_lock:
             for block in new_blocks:
-                chain_idx  = TCPHandler.check_block_place(block, self.active_chain, self.side_branches, self.chain_lock)
+                chain_idx  = TCPHandler.check_block_place(block, self.active_chain, self.utxo_set, \
+                                                          self.mempool, self.side_branches)
 
                 if chain_idx is not None and chain_idx >= 0:
                     TCPHandler.do_connect_block_and_after(block, chain_idx, self.active_chain, self.side_branches, \
@@ -214,7 +215,8 @@ class TCPHandler(socketserver.BaseRequestHandler):
         if isinstance(block, Block):
             logger.info(f"[p2p] received block {block.id} from peer {peer}")
             with self.chain_lock:
-                chain_idx  = TCPHandler.check_block_place(block, self.active_chain, self.side_branches, self.chain_lock)
+                chain_idx  = TCPHandler.check_block_place(block, self.active_chain, self.utxo_set, self.mempool, \
+                                                          self.side_branches)
                 if chain_idx is not None and chain_idx >= 0:
                     TCPHandler.do_connect_block_and_after(block, chain_idx, self.active_chain, self.side_branches, \
                                                        self.mempool, self.utxo_set, self.mine_interrupt, self.peers)
@@ -227,10 +229,12 @@ class TCPHandler(socketserver.BaseRequestHandler):
             logger.info(f'[p2p] {block} is not a Block')
 
     @classmethod
-    def do_connect_block_and_after(cls, block, chain_idx, active_chain: BlockChain, side_branches: Iterable[BlockChain], \
-                                mempool: MemPool, utxo_set:UTXO_Set, mine_interrupt: threading.Event, \
+    def do_connect_block_and_after(cls, block: Block, chain_idx, active_chain: BlockChain, side_branches: Iterable[BlockChain], \
+                                mempool: BaseMemPool, utxo_set: BaseUTXO_Set, mine_interrupt: threading.Event, \
                                 peers: Iterable[Peer]):
         if chain_idx == Params.ACTIVE_CHAIN_IDX:
+            if block.block_subsidy_fees != Block.get_block_subsidy(active_chain) + block.calculate_fees(utxo_set):
+                return False
             connect_block_success = active_chain.connect_block(block, active_chain, \
                                                     side_branches, \
                                     mempool, utxo_set, mine_interrupt, peers)
@@ -278,14 +282,14 @@ class TCPHandler(socketserver.BaseRequestHandler):
             logger.exception(f'[p2p] connect_block returned a False value')
 
     @classmethod
-    def check_block_place(cls, block: Block, active_chain: BlockChain, side_branches: Iterable[BlockChain], \
-                          chain_lock: _thread.RLock) -> int:
+    def check_block_place(cls, block: Block, active_chain: BlockChain, utxo_set: BaseUTXO_Set, mempool: BaseMemPool, \
+                          side_branches: Iterable[BlockChain]) -> int:
         if Block.locate_block(block.id, active_chain, side_branches)[0]:
             logger.debug(f'[p2p] ignore block already seen: {block.id}')
             return None # already seen block
 
         try:
-            chain_idx = block.validate_block(active_chain, side_branches, chain_lock)
+            chain_idx = block.validate_block(active_chain, utxo_set, mempool, side_branches)
         except BlockValidationError as e:
             if e.to_orphan:
                 logger.info(f"[p2p]  block {block.id} failed validation as an orphan block")

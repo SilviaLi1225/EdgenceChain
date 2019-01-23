@@ -5,7 +5,7 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 
-from ds.Block  import Block
+from ds.Block import Block
 from ds.UnspentTxOut import UnspentTxOut
 from ds.Transaction import Transaction
 from ds.TxIn import TxIn
@@ -15,6 +15,7 @@ from utils.Utils import Utils
 from utils.Errors import (BaseException, TxUnlockError, TxnValidationError, BlockValidationError)
 from p2p.Peer import Peer
 from ds.BaseMemPool import BaseMemPool
+from ds.BaseUTXO_Set import BaseUTXO_Set
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -96,7 +97,7 @@ class MemPool(BaseMemPool):
         return block
 
 
-    def add_txn_to_mempool(self, txn: Transaction, utxo_set: UTXO_Set) -> bool:
+    def add_txn_to_mempool(self, txn: Transaction, utxo_set: BaseUTXO_Set) -> bool:
         if txn.id in self.mempool:
             logger.info(f'[ds] txn {txn.id} already seen')
             return None

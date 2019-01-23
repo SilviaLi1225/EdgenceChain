@@ -6,6 +6,7 @@ from typing import (
 
 from ds.UnspentTxOut import UnspentTxOut
 from ds.OutPoint import OutPoint
+from ds.BaseUTXO_Set import BaseUTXO_Set
 
 
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
   # UTXO set
 
 
-class UTXO_Set(object):
+class UTXO_Set(BaseUTXO_Set):
 
     def __init__(self):
         self.utxoSet: Mapping[OutPoint, UnspentTxOut] = {}
