@@ -294,11 +294,11 @@ class TCPHandler(socketserver.BaseRequestHandler):
                 logger.exception(f'[p2p] block {block.id} failed validation due to internal error in this block')
                 return -2  # Internal error in this block
 
-        with chain_lock:
-            if chain_idx != Params.ACTIVE_CHAIN_IDX and len(side_branches) < chain_idx:
-                logger.info(
-                    f'[p2p] creating a new side branch (idx {chain_idx}) '
-                    f'for block {block.id}')
-                side_branches.append(BlockChain(idx = chain_idx, chain = []))
+
+        if chain_idx != Params.ACTIVE_CHAIN_IDX and len(side_branches) < chain_idx:
+            logger.info(
+                f'[p2p] creating a new side branch (idx {chain_idx}) '
+                f'for block {block.id}')
+            side_branches.append(BlockChain(idx = chain_idx, chain = []))
 
         return chain_idx
