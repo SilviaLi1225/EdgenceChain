@@ -21,6 +21,7 @@ class Actions:
     TxStatusRev = 7
     UTXO4AddrRev = 8
     Balance4AddrRev = 9
+    PeerExtend = 10
 
 
 class Message(NamedTuple):

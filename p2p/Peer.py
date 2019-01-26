@@ -24,7 +24,7 @@ from params.Params import Params
 from utils.Utils import Utils
 
 class Peer(NamedTuple):
-    ip: str = 'localhost'
+    ip: str = '127.0.0.1'
     port: int = 9999
 
     def __call__(self):
