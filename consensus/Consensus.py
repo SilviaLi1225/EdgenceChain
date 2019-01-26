@@ -37,4 +37,5 @@ class PoW(object):
         logger.info(
             f'[consensus] mining block found! {duration} s - {khs} KH/s - {block.id}')
 
+
         return block

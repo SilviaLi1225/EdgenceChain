@@ -105,7 +105,7 @@ class Block(NamedTuple):
             for height, block in enumerate(blockchain.chain, 1):
                 if block.id == block_hash:
                     if chain_idx != Params.ACTIVE_CHAIN_IDX:
-                        fork_height = Block.locate_block(blockchain.chain[0].prev_block_hash, active_chain)
+                        fork_height = Block.locate_block(blockchain.chain[0].prev_block_hash, active_chain)[1]
                         height = fork_height + height
                     return (block, height, chain_idx)
         return (None, None, None)
@@ -176,7 +176,7 @@ class Block(NamedTuple):
             spent = sum(find_utxo(i).value for i in txn.txins)
             sent = sum(o.value for o in txn.txouts)
             fee += (spent - sent)
-        logger.info(f'[ds] fees for {len(self.txns)} non-coinbase transactions in this block: {fee}')
+        logger.info(f'[ds] fees for {len(self.txns[1:])} non-coinbase transactions in this block: {fee}')
 
         return fee
 
