@@ -23,7 +23,18 @@ logger = logging.getLogger(__name__)
 
 
 class MerkleNode(NamedTuple):
+    """
+    if __name__ == '__main__':
 
+        txns=[Transaction(
+            txins=[TxIn(
+                to_spend=None, unlock_sig=b'0', unlock_pk=None, sequence=0)],
+            txouts=[TxOut(
+                value=5000000000,
+                to_address='0000000000000000000000000000000000')], locktime=None)]
+
+        print(MerkleNode.get_merkle_root_of_txns(txns).val)
+    """
     val: str
     children: Iterable = None
 

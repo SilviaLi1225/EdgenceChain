@@ -236,6 +236,8 @@ class Block(NamedTuple):
             return Params.ACTIVE_CHAIN_IDX
         else:
             if self.timestamp <= _get_median_time_past(11):
+                print('self.timestamp: ', self.timestamp)
+                print('median time: ', _get_median_time_past(11))
                 raise BlockValidationError('timestamp too old')
             prev_block, prev_block_height, prev_block_chain_idx = Block.locate_block(
                 self.prev_block_hash, active_chain, side_branches)

@@ -1,5 +1,4 @@
 .idea/
-Client/
 __pycache__/
 ds/__pycache__/
 consensus/__pycache__/

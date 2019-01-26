@@ -77,28 +77,28 @@ class EdgenceChain(object):
         with self.chain_lock:
             prev_block_hash = self.active_chain.chain[-1].id if self.active_chain.chain else None
 
-            block = Block(
-                version=0,
-                prev_block_hash=prev_block_hash,
-                merkle_hash='',
-                timestamp=int(time.time()),
-                bits= Block.get_next_work_required(prev_block_hash, self.active_chain, self.side_branches),
-                nonce=0,
-                txns=txns or [],
-            )
+        block = Block(
+            version=0,
+            prev_block_hash=prev_block_hash,
+            merkle_hash='',
+            timestamp=int(time.time()),
+            bits= Block.get_next_work_required(prev_block_hash, self.active_chain, self.side_branches),
+            nonce=0,
+            txns=txns or [],
+        )
 
-            if block.bits is None:
-                return None
+        if block.bits is None:
+            return None
 
-            if not block.txns:
-                block = self.mempool.select_from_mempool(block, self.utxo_set)
+        if not block.txns:
+            block = self.mempool.select_from_mempool(block, self.utxo_set)
 
-            fees = block.calculate_fees(self.utxo_set)
-            my_address = self.wallet()[2]
-            coinbase_txn = Transaction.create_coinbase(
-                my_address,
-                Block.get_block_subsidy(self.active_chain) + fees,
-                self.active_chain.height)
+        fees = block.calculate_fees(self.utxo_set)
+        my_address = self.wallet()[2]
+        coinbase_txn = Transaction.create_coinbase(
+            my_address,
+            Block.get_block_subsidy(self.active_chain) + fees,
+            self.active_chain.height)
         block = block._replace(txns=[coinbase_txn, *block.txns])
         block = block._replace(merkle_hash=MerkleNode.get_merkle_root_of_txns(block.txns).val)
 
@@ -123,7 +123,6 @@ class EdgenceChain(object):
                     Peer.save_peers(self.peers)
                     logger.info(f'remove dead peer {peer}')
         else:
-            logger.info(f'no peer nodes existed, ibd_done is set')
             self.ibd_done.set()
 
 
@@ -137,8 +136,8 @@ class EdgenceChain(object):
         def mine_forever():
             logger.info(f'thread for mining is started....')
             while True:
-
-                block = self.assemble_and_solve_block()
+                with self.chain_lock:
+                    block = self.assemble_and_solve_block()
 
                 if block:
                     for _peer in self.peers:
@@ -174,8 +173,8 @@ class EdgenceChain(object):
 
 
         self.initial_block_download()
-        old_height = self.active_chain.height-0.5
-        new_height = old_height+0.5
+        old_height = self.active_chain.height
+        new_height = old_height
         while new_height > old_height:
             old_height = new_height
             wait_times = 3
@@ -185,7 +184,7 @@ class EdgenceChain(object):
                 if wait_times <= 0:
                     break
             new_height = self.active_chain.height
-            logger.info(f'{int(new_height-old_height)} more blocks got this time, waiting for blocks syncing ...')
+            logger.info(f'{new_height-old_height} more blocks got this time, waiting for blocks syncing ...')
         self.ibd_done.set()
 
 
