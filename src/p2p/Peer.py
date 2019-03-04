@@ -2,7 +2,9 @@ from typing import (
     Iterable, NamedTuple, Dict, Mapping, Union, get_type_hints, Tuple,
     Callable)
 import os,logging,binascii
-
+#use regular expression to match non-IP
+import re
+import socket
 
 logging.basicConfig(
     level=getattr(logging, os.environ.get('TC_LOG_LEVEL', 'INFO')),
@@ -49,6 +51,18 @@ class Peer(NamedTuple):
                     (str(peer[0]) == 'localhost' and int(peer[1]) == Params.PORT_CURRENT):
                     pass
                 else:
+                    #match IP address
+                    if re.match(r'(?<![\.\d])(?:25[0-5]\.|2[0-4]\d\.|[01]?\d\d?\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)(?![\.\d])',peer[0])==None:
+                        #case I,is not a IP address use DNS
+                        #replace the peer's name to the resolved name(which should be a IP addr.)
+                        #catch errors if the name is not valid
+                        try:
+                            peer[0]=socket.gethostbyname(peer[0])
+                        except Exception:
+                            logger.exception(f"[p2p] {peer[0]} can not be resolved , maybe not a valid name")
+                    else:
+                        pass
+                    #append the IP to the peers
                     peers.append(Peer(str(peer[0]), int(peer[1])))
             try:
                 with open(peerfile, "wb") as f:
